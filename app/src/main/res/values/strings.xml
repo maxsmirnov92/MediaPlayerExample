@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">MediaPlayerExample</string>
+
+    <string name="action_select">Select</string>
+
+    <string name="loading">Загрузка…</string>
+    <string name="data_missing">Нет данных</string>
+    <string name="data_load_failed">Не удалось загрузить данные</string>
+    <string name="no_data">@string/data_missing</string>
+
+</resources>
