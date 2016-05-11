@@ -1,12 +1,17 @@
 package ru.maxsmr.mediaplayercontroller;
 
+import android.content.ContentResolver;
 import android.content.Context;
 import android.database.Observable;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
+import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.text.TextUtils;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 import android.view.View;
 import android.widget.MediaController;
 
@@ -15,10 +20,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import ru.altarix.commonutils.data.FileHelper;
+import ru.maxsmr.commonutils.data.FileHelper;
 
 public final class MediaPlayerController implements MediaController.MediaPlayerControl, HeadsetPlugBroadcastReceiver.OnHeadsetStateChangedListener {
 
@@ -43,13 +49,27 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     @Nullable
     private Uri mAudioUri;
 
+    @Nullable
+    private Uri mVideoUri;
+
     @NonNull
     private Map<String, String> mHeaders = new LinkedHashMap<>();
 
-    private boolean mCanPause = false;
+    private boolean isSurfaceCreated = false;
+    private SurfaceView mVideoView;
+
+    private int mVideoWidth = 0;
+    private int mVideoHeight = 0;
+    private int mSurfaceWidth = 0;
+    private int mSurfaceHeight = 0;
+
+    private boolean mCanPause = true;
     private boolean mCanSeekBack = false;
     private boolean mCanSeekForward = false;
-    private int mSeekWhenPrepared;  // recording the seek position while preparing
+
+    private int mSeekWhenPrepared = POSITION_EMPTY;  // set the seek position after prepared
+
+    private boolean mLoopWhenPreparing = false; // set looping property while preparing
 
     public static final int AUDIO_SESSION_EMPTY = -1;
 
@@ -61,9 +81,16 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     private MediaController mMediaController;
     private View mAnchorView;
 
+    @NonNull
+    private final HeadsetPlugBroadcastReceiver mHeadsetPlugBroadcastReceiver = new HeadsetPlugBroadcastReceiver();
+
     private void init() {
         mHeadsetPlugBroadcastReceiver.register(mContext);
         mHeadsetPlugBroadcastReceiver.getHeadsetStateChangedObservable().registerObserver(this);
+    }
+
+    public State getCurrentState() {
+        return mCurrentState;
     }
 
     private void setCurrentState(@NonNull State newState) {
@@ -72,6 +99,10 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
             logger.info("current state: " + mCurrentState);
             mStateChangedObservable.dispatchCurrentStateChanged();
         }
+    }
+
+    public State getTargetState() {
+        return mTargetState;
     }
 
     private void setTargetState(@NonNull State newState) {
@@ -83,14 +114,32 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     }
 
     @NonNull
-    private final HeadsetPlugBroadcastReceiver mHeadsetPlugBroadcastReceiver = new HeadsetPlugBroadcastReceiver();
-
-    @NonNull
     private final OnStateChangedObservable mStateChangedObservable = new OnStateChangedObservable();
 
     public Observable<OnStateChangedListener> getStateChangedObservable() {
         return mStateChangedObservable;
     }
+
+    private final OnVideoSizeChangedObservable mVideoSizeChangedObservable = new OnVideoSizeChangedObservable();
+
+    public Observable<OnVideoSizeChangedListener> getVideoSizeChangedObservable() {
+        return mVideoSizeChangedObservable;
+    }
+
+    private final MediaPlayer.OnVideoSizeChangedListener mVideoSizeChangedListener =
+            new MediaPlayer.OnVideoSizeChangedListener() {
+                public void onVideoSizeChanged(MediaPlayer mp, int width, int height) {
+                    if (mVideoView != null) {
+                        mVideoWidth = mp.getVideoWidth();
+                        mVideoHeight = mp.getVideoHeight();
+                        if (mVideoWidth != 0 && mVideoHeight != 0) {
+                            mVideoView.getHolder().setFixedSize(mVideoWidth, mVideoHeight);
+                            mVideoView.requestLayout();
+                        }
+                        mVideoSizeChangedObservable.dispatchOnVideoSizeChanged(width, height);
+                    }
+                }
+            };
 
     private final MediaPlayer.OnBufferingUpdateListener mBufferingUpdateListener =
             new MediaPlayer.OnBufferingUpdateListener() {
@@ -104,14 +153,23 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
         @Override
         public void onPrepared(MediaPlayer mp) {
+            logger.debug("onPrepared()");
 
-            if (mAudioUri == null) {
-                throw new IllegalStateException("audio uri is null, wtf?");
+            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.ICE_CREAM_SANDWICH_MR1) {
+                logger.info("track info: " + Arrays.toString(mMediaPlayer.getTrackInfo()));
             }
+
+            if (mAudioUri == null && mVideoUri == null) {
+                throw new IllegalStateException("audio/video uri is null, wtf?");
+            }
+
+            boolean isAudio = mAudioUri != null;
+            Uri resourceUri = isAudio ? mAudioUri : mVideoUri;
 
             setCurrentState(State.PREPARED);
 
-            if (mAudioUri.getScheme().equalsIgnoreCase("file")) {
+            if (resourceUri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_FILE)) {
+
                 mCanPause = true;
                 mCanSeekBack = true;
                 mCanSeekForward = true;
@@ -135,30 +193,63 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
             }
 
-            int seekToPosition = mSeekWhenPrepared;  // mSeekWhenPrepared may be changed after seekTo() call
+            if (mMediaController != null) {
+                mMediaController.setEnabled(true);
+            }
+
+            mVideoWidth = mp.getVideoWidth();
+            mVideoHeight = mp.getVideoHeight();
+
+            final int seekToPosition = mSeekWhenPrepared;  // mSeekWhenPrepared may be changed after seekTo() call
             seekTo(seekToPosition);
 
-            if (mTargetState == State.PLAYING) {
-                start();
-                if (mMediaController != null) {
-                    mMediaController.show();
+            if (isAudio || mVideoWidth != 0 && mVideoHeight != 0) {
+                if (!isAudio) {
+                    mVideoView.getHolder().setFixedSize(mVideoWidth, mVideoHeight);
                 }
-            } else if (!isPlaying() && (seekToPosition >= POSITION_START || getCurrentPosition() > POSITION_START)) {
-                if (mMediaController != null) {
-                    // Show the media controls when we're paused into a video and make 'em stick.
-                    mMediaController.show(0);
+                if (isAudio || mSurfaceWidth == mVideoWidth && mSurfaceHeight == mVideoHeight) {
+                    // We didn't actually change the size (it was already at the size
+                    // we need), so we won't get a "surface changed" callback, so
+                    // start the video here instead of in the callback.
+                    if (mTargetState == State.PLAYING) {
+                        start();
+                        if (mMediaController != null) {
+                            mMediaController.show();
+                        }
+                    } else if (!isPlaying() && (seekToPosition >= POSITION_START || getCurrentPosition() > POSITION_START)) {
+                        if (mMediaController != null) {
+                            // Show the media controls when we're paused into a video and make 'em stick.
+                            mMediaController.show(0);
+                        }
+                    }
+                }
+            } else {
+                // We don't know the video size yet, but should start anyway.
+                // The video size might be reported to us later.
+                if (mTargetState == State.PLAYING) {
+                    start();
                 }
             }
 
         }
     };
 
+    private final OnCompletionObservable completionObservable = new OnCompletionObservable();
+
+    public final Observable<OnCompletionListener> getCompletionObservable() {
+        return completionObservable;
+    }
+
     private final MediaPlayer.OnCompletionListener mCompletionListener =
             new MediaPlayer.OnCompletionListener() {
                 public void onCompletion(MediaPlayer mp) {
                     logger.info("onCompletion()");
+
                     setCurrentState(State.IDLE);
                     setTargetState(State.IDLE);
+
+                    completionObservable.dispatchCompleted();
+
                     if (mMediaController != null) {
                         mMediaController.hide();
                     }
@@ -190,7 +281,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     @NonNull
     private final OnErrorObservable mErrorObservable = new OnErrorObservable();
 
-    public Observable<MediaPlayer.OnErrorListener> getErrorObservable() {
+    public Observable<OnErrorListener> getErrorObservable() {
         return mErrorObservable;
     }
 
@@ -225,19 +316,42 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         return isInPlaybackState() && mMediaPlayer.isPlaying();
     }
 
+    public boolean isLooping() {
+        return mCurrentState == State.PREPARED || isInPlaybackState() && mMediaPlayer != null && mMediaPlayer.isLooping();
+    }
+
+    public void setLooping(boolean toggle) {
+        if (mMediaPlayer != null) {
+            mMediaPlayer.setLooping(toggle);
+        }
+        mLoopWhenPreparing = toggle;
+    }
+
+    public boolean isAudioSpecified() {
+        return mAudioUri != null;
+    }
+
     @Nullable
     public Uri getAudioUri() {
         return mAudioUri;
     }
 
-    public void setAudioFile(File file) {
-        if (FileHelper.isFileCorrect(file)) {
-            setAudioUri(Uri.fromFile(file));
+    public void setAudioFile(@Nullable File file) {
+        if (file != null) {
+            if (FileHelper.isFileCorrect(file)) {
+                setAudioUri(Uri.fromFile(file));
+            }
+        } else {
+            setAudioUri(null);
         }
     }
 
-    public void setAudioPath(String path) {
-        setAudioUri(Uri.parse(path));
+    public void setAudioPath(@Nullable String path) {
+        if (!TextUtils.isEmpty(path)) {
+            setAudioUri(Uri.parse(path));
+        } else {
+            setAudioUri(null);
+        }
     }
 
     public void setAudioUri(@Nullable Uri audioUri) {
@@ -245,18 +359,70 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     }
 
     public void setAudioUri(@Nullable Uri audioUri, @Nullable Map<String, String> headers) {
+        logger.debug("setAudioUri(), audioUri=" + audioUri + ", headers=" + headers);
 
         if (mCurrentState == State.RELEASED) {
-            throw new IllegalStateException("MediaPlayerController was released");
+            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was released");
         }
 
         if ((audioUri != null ? !audioUri.equals(this.mAudioUri) : this.mAudioUri != null) || (headers == null || !headers.equals(this.mHeaders))) {
 
+            this.mVideoUri = null;
             this.mAudioUri = audioUri;
             this.mHeaders = headers != null ? new LinkedHashMap<>(headers) : new LinkedHashMap<String, String>();
 
             if (mCurrentState != State.IDLE) {
-                openAudio();
+                openUri();
+            }
+        }
+    }
+
+    public boolean isVideoSpecified() {
+        return mVideoUri != null;
+    }
+
+    @Nullable
+    public Uri getVideoUri() {
+        return mVideoUri;
+    }
+
+    public void setVideoFile(@Nullable File file) {
+        if (file != null) {
+            if (FileHelper.isFileCorrect(file)) {
+                setVideoUri(Uri.fromFile(file));
+            }
+        } else {
+            setVideoUri(null);
+        }
+    }
+
+    public void setVideoPath(@Nullable String path) {
+        if (!TextUtils.isEmpty(path)) {
+            setVideoUri(Uri.parse(path));
+        } else {
+            setVideoUri(null);
+        }
+    }
+
+    public void setVideoUri(@Nullable Uri videoUri) {
+        setVideoUri(videoUri, null);
+    }
+
+    public void setVideoUri(@Nullable Uri videoUri, @Nullable Map<String, String> headers) {
+        logger.debug("setVideoUri(), videoUri=" + videoUri + ", headers=" + headers);
+
+        if (mCurrentState == State.RELEASED) {
+            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was released");
+        }
+
+        if ((videoUri != null ? !videoUri.equals(this.mVideoUri) : this.mVideoUri != null) || (headers == null || !headers.equals(this.mHeaders))) {
+
+            this.mAudioUri = null;
+            this.mVideoUri = videoUri;
+            this.mHeaders = headers != null ? new LinkedHashMap<>(headers) : new LinkedHashMap<String, String>();
+
+            if (mCurrentState != State.IDLE) {
+                openUri();
             }
         }
     }
@@ -266,10 +432,32 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         return new LinkedHashMap<>(mHeaders);
     }
 
+    /**
+     * indicates whether surface is fully initialized
+     */
+    public boolean isSurfaceCreated() {
+        return (mVideoView != null && isSurfaceCreated && !mVideoView.getHolder().isCreating() && mVideoView.getHolder().getSurface() != null);
+    }
+
+    public void setVideoView(SurfaceView videoView) {
+
+        if (mVideoView != null) {
+            mVideoView.getHolder().removeCallback(mSHCallback);
+        }
+
+        mVideoView = videoView;
+        mVideoWidth = 0;
+        mVideoHeight = 0;
+
+        if (mVideoView != null) {
+            mVideoView.getHolder().addCallback(mSHCallback);
+        }
+    }
+
     public void seekTo(int msec) {
 
         if (mCurrentState == State.RELEASED) {
-            throw new IllegalStateException("MediaPlayerController was released");
+            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was released");
         }
 
         if (msec < POSITION_START && msec != POSITION_EMPTY)
@@ -292,17 +480,17 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
     @Override
     public boolean canPause() {
-        return false;
+        return mCanPause;
     }
 
     @Override
     public boolean canSeekBackward() {
-        return false;
+        return mCanSeekBack;
     }
 
     @Override
     public boolean canSeekForward() {
-        return false;
+        return mCanSeekForward;
     }
 
     public void toggleMediaControlsVisibility() {
@@ -322,10 +510,13 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         return mMediaController;
     }
 
+    /**
+     * @param controller must already has parent
+     */
     public void setMediaController(MediaController controller, View anchorView) {
 
         if (mCurrentState == State.RELEASED) {
-            throw new IllegalStateException("MediaPlayerController was released");
+            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was released");
         }
 
         if (mMediaController != null) {
@@ -348,107 +539,154 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         }
     }
 
-    private void openAudio() {
+    private void detachMediaController() {
+        if (mMediaController != null) {
+            mMediaController.hide();
+            mMediaController.setAnchorView(null);
+            mMediaController.setEnabled(false);
+        }
+    }
+
+    private synchronized void openUri() {
+        logger.debug("openUri()");
 
         if (mCurrentState == State.RELEASED) {
-            throw new IllegalStateException("MediaPlayerController was released");
+            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was released");
         }
 
-        if (mAudioUri == null) {
-            throw new IllegalStateException("audio uri is not specified");
+        if (mAudioUri == null && mVideoUri == null) {
+            throw new IllegalStateException("audio/video uri is not specified");
         }
 
-        // we shouldn't clear the target state, because somebody might have
-        // called start() previously
-        releasePlayer(false);
+        boolean isAudio = mAudioUri != null;
 
-        AudioManager am = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
-        am.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+        if (mCurrentState != State.PREPARING) {
 
-        try {
-            mMediaPlayer = new MediaPlayer();
+            // we shouldn't clear the target state, because somebody might have
+            // called start() previously
+            releasePlayer(false);
 
-            mMediaPlayer.setOnPreparedListener(mPreparedListener);
-            mMediaPlayer.setOnCompletionListener(mCompletionListener);
-            mMediaPlayer.setOnErrorListener(mErrorListener);
-            mMediaPlayer.setOnInfoListener(mInfoListener);
-            mMediaPlayer.setOnBufferingUpdateListener(mBufferingUpdateListener);
-            mCurrentBufferPercentage = 0;
-            mMediaPlayer.setDataSource(mContext, mAudioUri, mHeaders);
-            mMediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-            mMediaPlayer.setScreenOnWhilePlaying(false);
-            mMediaPlayer.prepareAsync();
+            AudioManager am = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
+            am.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
 
-            // we don't set the target state here either, but preserve the
-            // target state that was there before.
-            setCurrentState(State.PREPARING);
-            attachMediaController();
+            try {
+                mMediaPlayer = new MediaPlayer();
 
-        } catch (IOException | IllegalArgumentException ex) {
-            logger.error("Unable to open content: " + mAudioUri, ex);
-            setCurrentState(State.IDLE);
-            setTargetState(State.IDLE);
-            mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
+                mMediaPlayer.setOnPreparedListener(mPreparedListener);
+                mMediaPlayer.setOnCompletionListener(mCompletionListener);
+                mMediaPlayer.setOnErrorListener(mErrorListener);
+                mMediaPlayer.setOnInfoListener(mInfoListener);
+                mMediaPlayer.setOnBufferingUpdateListener(mBufferingUpdateListener);
+
+                mCurrentBufferPercentage = 0;
+
+                if (isAudio) {
+
+                    logger.debug("audio data source: " + mAudioUri);
+                    mMediaPlayer.setDataSource(mContext, mAudioUri, mHeaders);
+                    mMediaPlayer.setOnVideoSizeChangedListener(null);
+                    mMediaPlayer.setDisplay(null);
+
+                } else {
+
+                    if (!isSurfaceCreated()) {
+                        throw new IllegalStateException("surface was not created");
+                    }
+
+                    logger.debug("video data source: " + mVideoUri);
+                    mMediaPlayer.setDataSource(mContext, mVideoUri, mHeaders);
+                    mMediaPlayer.setOnVideoSizeChangedListener(mVideoSizeChangedListener);
+                    mMediaPlayer.setDisplay(mVideoView.getHolder());
+                }
+
+                mMediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+                mMediaPlayer.setScreenOnWhilePlaying(!isAudio);
+                mMediaPlayer.setLooping(mLoopWhenPreparing);
+                mMediaPlayer.prepareAsync();
+
+                // we don't set the target state here either, but preserve the
+                // target state that was there before.
+                setCurrentState(State.PREPARING);
+                attachMediaController();
+
+            } catch (IOException | IllegalArgumentException | IllegalStateException ex) {
+                logger.error("Unable to open content: " + mAudioUri, ex);
+                setCurrentState(State.IDLE);
+                setTargetState(State.IDLE);
+                mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
+            }
         }
     }
 
     @Override
     public void start() {
+        logger.debug("start()");
 
         if (mCurrentState == State.RELEASED) {
-            throw new IllegalStateException("MediaPlayerController was released");
+            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was released");
         }
 
-        if (isInPlaybackState()) {
-            mMediaPlayer.start();
-            setCurrentState(State.PLAYING);
+        if (mCurrentState != State.PLAYING) {
+            if (isInPlaybackState()) {
+                mMediaPlayer.start();
+                setCurrentState(State.PLAYING);
+            }
+            setTargetState(State.PLAYING);
         }
-        setTargetState(State.PLAYING);
     }
 
     @Override
     public void pause() {
+        logger.debug("pause()");
 
         if (mCurrentState == State.RELEASED) {
-            throw new IllegalStateException("MediaPlayerController was released");
+            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was released");
         }
 
-        if (isInPlaybackState()) {
-            if (mMediaPlayer.isPlaying()) {
-                mMediaPlayer.pause();
-                setCurrentState(State.PAUSED);
+        if (mCurrentState != State.PAUSED) {
+            if (isInPlaybackState()) {
+                if (mMediaPlayer.isPlaying()) {
+                    mMediaPlayer.pause();
+                    setCurrentState(State.PAUSED);
+                }
             }
+            setTargetState(State.PAUSED);
         }
-        setTargetState(State.PAUSED);
     }
 
     public void stop() {
+        logger.debug("stop()");
 
         if (mCurrentState == State.RELEASED) {
-            throw new IllegalStateException("MediaPlayerController was released");
+            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was released");
         }
 
-        if (isInPlaybackState()) {
-            mMediaPlayer.stop();
+        if (mCurrentState != State.IDLE) {
+            if (isInPlaybackState()) {
+                mMediaPlayer.stop();
+            }
+            releasePlayer(true);
         }
-        releasePlayer(true);
     }
 
     public void resume() {
-        openAudio();
+        logger.debug("resume()");
+        openUri();
     }
 
     public void suspend() {
+        logger.debug("suspend()");
         releasePlayer(false);
     }
 
     /*
- * release the media player in any state
-*/
-    private void releasePlayer(boolean cleartargetstate) {
+     * release the media player in any state
+     */
+    private void releasePlayer(boolean clearTargetState) {
+        logger.debug("releasePlayer(), clearTargetState=" + clearTargetState);
 
         if (mCurrentState == State.RELEASED) {
-            throw new IllegalStateException("MediaPlayerController was released");
+            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was released");
         }
 
         if (mMediaPlayer != null) {
@@ -459,24 +697,26 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
             mCurrentBufferPercentage = 0;
 
-            mCanPause = false;
+            mCanPause = true;
             mCanSeekBack = false;
             mCanSeekForward = false;
 
             setCurrentState(State.IDLE);
-            if (cleartargetstate) {
+            if (clearTargetState) {
                 setTargetState(State.IDLE);
             }
 
             AudioManager am = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
             am.abandonAudioFocus(null);
+
+            detachMediaController();
         }
     }
 
     public void release() {
 
         if (mCurrentState == State.RELEASED) {
-            throw new IllegalStateException("MediaPlayerController was already released");
+            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was already released");
         }
 
         releasePlayer(true);
@@ -496,11 +736,12 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
     @Override
     public void onHeadphonesUnplugged() {
-        if (isPlaying()) {
-            pause();
-        }
+        pause();
     }
 
+    /**
+     * mpc instance state
+     */
     public enum State {
         IDLE, PREPARING, PREPARED, PLAYING, PAUSED, RELEASED
     }
@@ -527,16 +768,84 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         }
     }
 
-    private class OnErrorObservable extends Observable<MediaPlayer.OnErrorListener> {
+    public interface OnCompletionListener {
+        void onCompletion();
+    }
 
-        private void dispatchError(int what, int extra) {
+    private class OnCompletionObservable extends Observable<OnCompletionListener> {
 
-            if (mMediaPlayer == null)
-                throw new IllegalStateException("mediaPlayer was not initialized");
-
-            for (MediaPlayer.OnErrorListener l : mObservers) {
-                l.onError(mMediaPlayer, what, extra);
+        private void dispatchCompleted() {
+            for (OnCompletionListener l : mObservers) {
+                l.onCompletion();
             }
         }
     }
+
+    public interface OnErrorListener {
+
+        void onError(int what, int extra);
+    }
+
+    private class OnErrorObservable extends android.database.Observable<OnErrorListener> {
+
+        private void dispatchError(int what, int extra) {
+            for (OnErrorListener l : mObservers) {
+                l.onError(what, extra);
+            }
+        }
+    }
+
+    public interface OnVideoSizeChangedListener {
+
+        void onVideoSizeChanged(int width, int height);
+    }
+
+    private class OnVideoSizeChangedObservable extends Observable<OnVideoSizeChangedListener> {
+
+        private void dispatchOnVideoSizeChanged(int width, int height) {
+            for (OnVideoSizeChangedListener l : mObservers) {
+                l.onVideoSizeChanged(width, height);
+            }
+        }
+    }
+
+    private final SurfaceHolder.Callback mSHCallback = new SurfaceHolder.Callback() {
+        public void surfaceChanged(SurfaceHolder holder, int format,
+                                   int w, int h) {
+            logger.debug("surfaceChanged(), format=" + format + ", w=" + w + ", h=" + h);
+
+            mSurfaceWidth = w;
+            mSurfaceHeight = h;
+
+            boolean isValidState = (mTargetState == State.PLAYING);
+            boolean hasValidSize = (mVideoWidth == w && mVideoHeight == h);
+
+            if (mMediaPlayer != null && isValidState && hasValidSize) {
+                if (mSeekWhenPrepared != POSITION_EMPTY) {
+                    seekTo(mSeekWhenPrepared);
+                }
+                start();
+            }
+        }
+
+        public void surfaceCreated(SurfaceHolder holder) {
+            logger.debug("surfaceCreated()");
+
+            isSurfaceCreated = true;
+
+            if (mVideoUri != null) {
+                openUri();
+            }
+        }
+
+        // after we return from this we can't use the surface any more
+        public void surfaceDestroyed(SurfaceHolder holder) {
+            logger.debug("surfaceDestroyed()");
+
+            mSurfaceWidth = 0;
+            mSurfaceHeight = 0;
+
+            releasePlayer(true);
+        }
+    };
 }

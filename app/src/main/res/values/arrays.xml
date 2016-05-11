@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="actionbar_navigation_items">
+        <item>file://</item>
+        <item>http://</item>
+    </string-array>
+</resources>

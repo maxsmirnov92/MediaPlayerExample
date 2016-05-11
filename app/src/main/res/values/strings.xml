@@ -3,6 +3,12 @@
 
     <string name="action_select">Select</string>
 
+    <string name="dialog_url_title">Input streaming URL</string>
+    <string name="dialog_url_type_text">Is video</string>
+
+    <string name="error_url_incorrect">Incorrect URL</string>
+    <string name="error_url_load_failed">Load URL failed</string>
+
     <string name="loading">Загрузка…</string>
     <string name="data_missing">Нет данных</string>
     <string name="data_load_failed">Не удалось загрузить данные</string>

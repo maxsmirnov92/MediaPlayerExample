@@ -4,12 +4,24 @@ android {
     compileSdkVersion 23
     buildToolsVersion "23.0.3"
 
+    Properties hardcodeProperties = new Properties()
+    if (file("hardcode.properties").exists()) {
+        hardcodeProperties.load(new FileInputStream(file("hardcode.properties")))
+    }
+    final hardcodeAudioUrl = hardcodeProperties["AUDIO_URL"] == null ? "" : hardcodeProperties["AUDIO_URL"]
+    final hardcodeVideoUrl = hardcodeProperties["VIDEO_URL"] == null ? "" : hardcodeProperties["VIDEO_URL"]
+    final hardcodeUrlChoice = hardcodeProperties["URL_TO_USE"] == null ? "" : hardcodeProperties["URL_TO_USE"]
+
     defaultConfig {
         applicationId "ru.maxsmr.mediaplayerexample"
         minSdkVersion 15
         targetSdkVersion 23
         versionCode 1
         versionName "1.0"
+
+        buildConfigField "String", "AUDIO_URL", "\"" + hardcodeAudioUrl + "\""
+        buildConfigField "String", "VIDEO_URL", "\"" + hardcodeVideoUrl + "\""
+        buildConfigField "String", "URL_TYPE_TO_USE", "\"" + hardcodeUrlChoice + "\""
     }
     buildTypes {
         release {
