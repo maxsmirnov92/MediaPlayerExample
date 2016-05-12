@@ -7,19 +7,19 @@ import java.util.Date;
 public class CompareUtils {
 
     public static boolean intsEqual(@Nullable Integer one, @Nullable Integer another) {
-        return !(one != null ? !one.equals(another) : another != null);
+        return one != null ? one.equals(another) : another == null;
     }
 
     public static boolean longsEqual(@Nullable Long one, @Nullable Long another) {
-        return !(one != null ? !one.equals(another) : another != null);
+        return one != null ? one.equals(another) : another == null;
     }
 
     public static boolean floatEqual(@Nullable Float one, @Nullable Float another) {
-        return !(one != null ? !one.equals(another) : another != null);
+        return one != null ? one.equals(another) : another == null;
     }
 
     public static boolean doubleEqual(@Nullable Double one, @Nullable Double another) {
-        return !(one != null ? !one.equals(another) : another != null);
+        return one != null ? one.equals(another) : another == null;
     }
 
     public static boolean charsEqual(@Nullable Character one, @Nullable Character another, boolean ignoreCase) {
@@ -27,11 +27,11 @@ public class CompareUtils {
             one = one != null ? Character.toUpperCase(one) : null;
             another = another != null ? Character.toUpperCase(another) : null;
         }
-        return !(one != null ? !one.equals(another) : another != null);
+        return one != null ? one.equals(another) : another != null;
     }
 
     public static boolean stringsEqual(@Nullable String one, @Nullable String another, boolean ignoreCase) {
-        return !(one != null ? (!ignoreCase ? !one.equals(another) : !one.equalsIgnoreCase(another)) : another != null);
+        return one != null ? (!ignoreCase ? one.equals(another) : one.equalsIgnoreCase(another)) : another == null;
     }
 
     public static int compareInts(@Nullable Integer one, @Nullable Integer another, boolean ascending) {

@@ -168,7 +168,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
             setCurrentState(State.PREPARED);
 
-            if (resourceUri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_FILE)) {
+            if (resourceUri.getScheme() == null || resourceUri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_FILE)) {
 
                 mCanPause = true;
                 mCanSeekBack = true;
@@ -372,7 +372,11 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
             this.mHeaders = headers != null ? new LinkedHashMap<>(headers) : new LinkedHashMap<String, String>();
 
             if (mCurrentState != State.IDLE) {
-                openUri();
+                if (mAudioUri != null) {
+                    openUri();
+                } else {
+                    stop();
+                }
             }
         }
     }
@@ -422,7 +426,11 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
             this.mHeaders = headers != null ? new LinkedHashMap<>(headers) : new LinkedHashMap<String, String>();
 
             if (mCurrentState != State.IDLE) {
-                openUri();
+                if (mVideoUri != null) {
+                    openUri();
+                } else {
+                    stop();
+                }
             }
         }
     }

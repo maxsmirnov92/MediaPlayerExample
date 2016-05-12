@@ -1,7 +1,8 @@
 <resources>
     <string name="app_name">MediaPlayerExample</string>
 
-    <string name="action_select">Select</string>
+    <string name="action_add_resource">Add resource</string>
+    <string name="action_file_select_mode">File select mode</string>
 
     <string name="dialog_url_title">Input streaming URL</string>
     <string name="dialog_url_type_text">Is video</string>

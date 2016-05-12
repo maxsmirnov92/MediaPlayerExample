@@ -41,16 +41,21 @@ import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.util.ArrayList;
+import java.util.List;
 
 import ru.maxsmr.commonutils.android.GuiUtils;
 import ru.maxsmr.commonutils.data.FileHelper;
 import ru.maxsmr.mediaplayercontroller.MediaPlayerController;
+import ru.maxsmr.mediaplayercontroller.PlaylistManager;
+import ru.maxsmr.mediaplayercontroller.utils.MetadataRetriever;
 
-public class MainActivity extends AppCompatActivity implements SurfaceHolder.Callback, MediaPlayerController.OnStateChangedListener, MediaPlayerController.OnErrorListener, MediaPlayerController.OnVideoSizeChangedListener, AdapterView.OnItemSelectedListener {
+public class TestActivity extends AppCompatActivity implements SurfaceHolder.Callback, MediaPlayerController.OnStateChangedListener, MediaPlayerController.OnErrorListener, MediaPlayerController.OnVideoSizeChangedListener, PlaylistManager.OnTracksSetListener, AdapterView.OnItemSelectedListener {
 
-    private static final Logger logger = LoggerFactory.getLogger(MainActivity.class);
+    private static final Logger logger = LoggerFactory.getLogger(TestActivity.class);
 
     private MediaPlayerController mediaPlayerController;
+    private PlaylistManager playlistManager;
 
     private Spinner navigationSpinner;
 
@@ -87,22 +92,34 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
     }
 
     private void initMediaController() {
+        mediaPlayerController = new MediaPlayerController(this);
+        mediaPlayerController.setVideoView(surfaceView);
+        mediaPlayerController.getStateChangedObservable().registerObserver(this);
+        mediaPlayerController.getErrorObservable().registerObserver(this);
+        mediaPlayerController.getVideoSizeChangedObservable().registerObserver(this);
+    }
+
+    private void initPlaylistManager() {
+        playlistManager = new PlaylistManager(mediaPlayerController);
+        playlistManager.getTracksSetObservable().registerObserver(this);
+    }
+
+    private void initMediaViews() {
         loadingLayout = (LinearLayout) findViewById(R.id.llLoading);
         loadingLayout.setVisibility(View.GONE);
         errorView = (TextView) findViewById(R.id.emptyText);
         errorView.setVisibility(View.GONE);
+
         GuiUtils.setProgressBarColor(ContextCompat.getColor(this, R.color.progressBarColor), (ProgressBar) loadingLayout.findViewById(R.id.pbLoading));
         FrameLayout contentLayout = (FrameLayout) findViewById(R.id.flContent);
+
         mediaViews = new MediaController(this);
+        mediaViews.setPrevNextListeners(new PreviousClickListener(), new NextClickListener());
         ViewGroup parent = (ViewGroup) mediaViews.getParent();
         parent.removeAllViews();
         contentLayout.addView(mediaViews, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        mediaPlayerController = new MediaPlayerController(this);
-        mediaPlayerController.setVideoView(surfaceView);
+
         mediaPlayerController.setMediaController(mediaViews, contentLayout);
-        mediaPlayerController.getStateChangedObservable().registerObserver(this);
-        mediaPlayerController.getErrorObservable().registerObserver(this);
-        mediaPlayerController.getVideoSizeChangedObservable().registerObserver(this);
     }
 
     private void initSurfaceView() {
@@ -111,36 +128,76 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
 //        surfaceView.setVisibility(View.GONE);
     }
 
+    private Menu menu;
+
     @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.menu_main, menu);
+    public boolean onCreateOptionsMenu(final Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_test, this.menu = menu);
+
+//        // Restore the check state e.g. if the device has been rotated.
+//        final MenuItem fileSelectModeItem = menu.findItem(R.id.actionFileSelectMode);
+//        CheckBox cb = (CheckBox) fileSelectModeItem.getActionView().findViewById(R.id.actionItemCheckbox);
+//        if (cb != null) {
+//            // Set the text to match the item.
+//            cb.setText(fileSelectModeItem.getTitle());
+//            // Add the onClickListener because the CheckBox doesn't automatically trigger onOptionsItemSelected.
+//            cb.setOnClickListener(new View.OnClickListener() {
+//                @Override
+//                public void onClick(View v) {
+//                    setActionFileSelectModeChecked(menu, !fileSelectModeItem.isChecked());
+//                    onOptionsItemSelected(fileSelectModeItem);
+//                }
+//            });
+//        }
+
         return super.onCreateOptionsMenu(menu);
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == R.id.actionSelectTrack) {
+        if (item.getItemId() == R.id.actionAddTrack) {
             if (navigationSpinner.getSelectedItemPosition() == 0) {
                 showFileSelectDialog();
             } else {
                 showEditDialog();
             }
             return true;
+        } else if (item.getItemId() == R.id.actionFileSelectMode) {
+            item.setChecked(!item.isChecked());
         }
         return super.onOptionsItemSelected(item);
     }
 
+    private boolean isActionFileSelectModeChecked(Menu menu) {
+        MenuItem menuItem = menu.findItem(R.id.actionFileSelectMode);
+//        // Since it is shown as an action, and not in the sub-menu we have to manually set the icon too.
+//        CheckBox cb = (CheckBox) menuItem.getActionView().findViewById(R.id.actionItemCheckbox);
+//        return cb != null && cb.isChecked();
+        return menuItem.isChecked();
+    }
+
+    // Set the check state of an actionbar item that has its actionLayout set to a layout
+    // containing a checkbox with the ID action_item_checkbox.
+//    private void setActionFileSelectModeChecked(Menu menu, boolean checked) {
+//        MenuItem menuItem = menu.findItem(R.id.actionFileSelectMode);
+//        menuItem.setChecked(checked);
+//        // Since it is shown as an action, and not in the sub-menu we have to manually set the icon too.
+//        CheckBox cb = (CheckBox) menuItem.getActionView().findViewById(R.id.actionItemCheckbox);
+//        if (cb != null)
+//            cb.setChecked(checked);
+//    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_test);
         initToolbar();
         initSpinner();
-        initSurfaceView();
         initMediaController();
+        initPlaylistManager();
+        initSurfaceView();
+        initMediaViews();
     }
-
 
     @Override
     protected void onResume() {
@@ -224,6 +281,9 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
     public void onCurrentStateChanged(@NonNull MediaPlayerController.State currentState) {
         logger.info("onCurrentStateChanged(), currentState=" + currentState);
         invalidateByCurrentState();
+        if (currentState == MediaPlayerController.State.PLAYING) {
+            logger.debug("metadata: " + MetadataRetriever.extractMetaData(this, mediaPlayerController.getAudioUri(), null));
+        }
     }
 
     @Override
@@ -267,8 +327,11 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
     private void showFileSelectDialog() {
         if (!isFileDialogShowing()) {
-            FileDialog fd = new FileDialog(this);
-            fd.setShowDirectoryOnly(false);
+
+            final boolean fileOrFolders = isActionFileSelectModeChecked(menu);
+
+            final FileDialog fd = new FileDialog(this);
+            fd.setShowDirectoryOnly(!fileOrFolders);
             fd.setFileSortedBy(FileDialog.SORTED_BY_NAME);
             fd.initDirectory(lastSelectedDirectory != null && FileHelper.isDirExists(lastSelectedDirectory.getAbsolutePath()) ? lastSelectedDirectory.getAbsolutePath() : Environment.getExternalStorageDirectory().toString());
             fd.addDirectoryListener(new FileDialog.DirSelectedListener() {
@@ -276,6 +339,17 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
                 public void directorySelected(File directory, String[] dirs, String[] files) {
                     if (directory != null && FileHelper.isDirExists(directory.getAbsolutePath())) {
                         lastSelectedDirectory = directory;
+
+                            if (!fileOrFolders) {
+                                List<File> folderFiles = FileHelper.getFiles(directory, false, null);
+                                List<String> filesList = new ArrayList<>();
+                                for (File f : folderFiles) {
+                                    filesList.add(f.getAbsolutePath());
+                                }
+                                playlistManager.setTracks(filesList);
+                                playlistManager.playTrack(0);
+                                hideFileSelectDialog();
+                            }
                     }
                 }
             });
@@ -283,18 +357,23 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
                 @Override
                 public void fileSelected(File file, String[] strings, String[] strings1) {
 
-                    String mimeType = URLConnection.guessContentTypeFromName(Uri.parse(file.getAbsolutePath()).toString());
-                    logger.debug("mimeType=" + mimeType);
+                    if (fileOrFolders) {
 
-                    if (mimeType.contains("audio")) {
-                        mediaPlayerController.setAudioFile(file);
-                    } else if (mimeType.contains("video")) {
-                        mediaPlayerController.setVideoFile(file);
+                        playlistManager.clearTracks();
+
+                        String mimeType = URLConnection.guessContentTypeFromName(Uri.parse(file.getAbsolutePath()).toString());
+                        logger.debug("mimeType=" + mimeType);
+
+                        if (mimeType.contains("audio")) {
+                            mediaPlayerController.setAudioFile(file);
+                        } else if (mimeType.contains("video")) {
+                            mediaPlayerController.setVideoFile(file);
+                        }
+
+                        mediaPlayerController.start();
+                        mediaPlayerController.resume();
+                        hideFileSelectDialog();
                     }
-
-                    mediaPlayerController.start();
-                    mediaPlayerController.resume();
-                    hideFileSelectDialog();
                 }
             });
 
@@ -350,7 +429,7 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
                         try {
                             new URL(url);
                         } catch (MalformedURLException e) {
-                            Toast.makeText(MainActivity.this, R.string.error_url_incorrect, Toast.LENGTH_SHORT).show();
+                            Toast.makeText(TestActivity.this, R.string.error_url_incorrect, Toast.LENGTH_SHORT).show();
                             return;
                         }
 
@@ -407,5 +486,29 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
     }
 
+    @Override
+    public void onTracksSet(@NonNull List<String> newTracks) {
+        logger.debug("onTracksSet(), newTracks=" + newTracks);
+    }
 
+    @Override
+    public void onTracksNotSet(@NonNull List<String> incorrectTracks) {
+        logger.debug("onTracksNotSet(), incorrectTracks=" + incorrectTracks);
+    }
+
+    private class PreviousClickListener implements View.OnClickListener {
+
+        @Override
+        public void onClick(View v) {
+            playlistManager.playPreviousTrack();
+        }
+    }
+
+    private class NextClickListener implements View.OnClickListener {
+
+        @Override
+        public void onClick(View v) {
+            playlistManager.playNextTrack();
+        }
+    }
 }
