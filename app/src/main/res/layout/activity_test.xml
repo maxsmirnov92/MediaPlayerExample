@@ -40,16 +40,17 @@
     </android.support.v7.widget.Toolbar>
 
     <FrameLayout
-        android:id="@+id/flContent"
-        android:layout_below="@+id/toolbar"
         android:layout_width="match_parent"
+        android:layout_below="@+id/toolbar"
+        android:layout_gravity="center"
         android:layout_height="match_parent">
 
-        <SurfaceView
-            android:id="@+id/svVideo"
-            android:visibility="visible"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"/>
+        <FrameLayout
+            android:id="@+id/flContent"
+            android:layout_height="match_parent"
+            android:layout_width="match_parent">
+
+        </FrameLayout>
 
         <include layout="@layout/placeholder_loading"/>
 

@@ -9,8 +9,10 @@ import android.support.annotation.NonNull;
 
 public class HeadsetPlugBroadcastReceiver extends BroadcastReceiver {
 
+    @NonNull
     private final OnHeadsetStateChangedObservable headsetStateChangedObservable = new OnHeadsetStateChangedObservable();
 
+    @NonNull
     public Observable<OnHeadsetStateChangedListener> getHeadsetStateChangedObservable() {
         return headsetStateChangedObservable;
     }

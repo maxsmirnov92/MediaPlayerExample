@@ -423,13 +423,13 @@ public class GuiUtils {
             case FIT_WIDTH:
                 previewProportion = (float) previewSize.x / (float) previewSize.y;
                 newWidth = limitSize;
-                newHeight = Math.round((float) viewSize.x * previewProportion);
+                newHeight = Math.round((float) viewSize.x / previewProportion);
                 break;
 
             case FIT_HEIGHT:
                 previewProportion = (float) previewSize.y / (float) previewSize.x;
                 newHeight = limitSize;
-                newWidth = Math.round((float) viewSize.y * previewProportion);
+                newWidth = Math.round((float) viewSize.y / previewProportion);
                 break;
 
             default:
@@ -471,7 +471,8 @@ public class GuiUtils {
     }
 
     public static void setViewSize(@NonNull View view, @NonNull Point size) {
-        if (size.x < -1 || size.y < -1) {
+
+        if (size.x < ViewGroup.LayoutParams.WRAP_CONTENT || size.y < ViewGroup.LayoutParams.WRAP_CONTENT) {
             throw new IllegalArgumentException("incorrect view size: " + size.x + "x" + size.y);
         }
 

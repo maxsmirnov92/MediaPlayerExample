@@ -9,12 +9,17 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.text.TextUtils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.util.Map;
 
 import ru.maxsmr.commonutils.data.FileHelper;
 
 public final class MetadataRetriever {
+
+    private static final Logger logger = LoggerFactory.getLogger(MetadataRetriever.class);
 
     private MetadataRetriever() {
         throw new UnsupportedOperationException("no instances.");
@@ -65,7 +70,7 @@ public final class MetadataRetriever {
             }
 
             metadata.duration = extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_DURATION, Integer.class);
-            metadata.cdTrackNumber = extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER, Integer.class);
+            metadata.cdTrackNumber = extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER, String.class);
             metadata.album = extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_ALBUM, String.class);
             metadata.artist = extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_ARTIST, String.class);
             metadata.author = extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_AUTHOR, String.class);
@@ -118,25 +123,26 @@ public final class MetadataRetriever {
                 return !isEmpty ? (M) value : defaultValue;
             } else if (clazz.isAssignableFrom(Long.class)) {
                 try {
-                    return !isEmpty ? (M) Long.valueOf(value) : defaultValue;
+                    return !isEmpty ? (M) Long.valueOf(value) : (defaultValue != null? defaultValue : (M) Long.valueOf(0));
                 } catch (NumberFormatException e) {
                     e.printStackTrace();
                     return defaultValue;
                 }
             } else if (clazz.isAssignableFrom(Integer.class)) {
                 try {
-                    return !isEmpty ? (M) Integer.valueOf(value) : defaultValue;
+                    return !isEmpty ? (M) Integer.valueOf(value) : (defaultValue != null? defaultValue : (M) Integer.valueOf(0));
                 } catch (NumberFormatException e) {
                     e.printStackTrace();
                     return defaultValue;
                 }
             } else if (clazz.isAssignableFrom(Boolean.class)) {
-                return !isEmpty ? (M) Boolean.valueOf(value) : defaultValue;
+                return !isEmpty ? (M) Boolean.valueOf(value) : (defaultValue != null? defaultValue : (M) Boolean.valueOf(false));
             } else {
                 throw new UnsupportedOperationException("incorrect class: " + clazz);
             }
         } catch (ClassCastException e) {
             e.printStackTrace();
+            logger.error("value " + value + " cannot be casted to " + clazz);
             return defaultValue;
         }
     }
@@ -146,7 +152,7 @@ public final class MetadataRetriever {
 
         long duration;
 
-        int cdTrackNumber;
+        String cdTrackNumber;
 
         String album;
 

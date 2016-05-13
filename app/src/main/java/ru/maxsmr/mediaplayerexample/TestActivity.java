@@ -1,7 +1,9 @@
 package ru.maxsmr.mediaplayerexample;
 
 import android.app.Dialog;
+import android.content.Context;
 import android.content.DialogInterface;
+import android.graphics.Point;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -12,6 +14,9 @@ import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.text.TextUtils;
+import android.util.DisplayMetrics;
+import android.view.Display;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -20,6 +25,7 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.CheckedTextView;
@@ -93,7 +99,6 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
     private void initMediaController() {
         mediaPlayerController = new MediaPlayerController(this);
-        mediaPlayerController.setVideoView(surfaceView);
         mediaPlayerController.getStateChangedObservable().registerObserver(this);
         mediaPlayerController.getErrorObservable().registerObserver(this);
         mediaPlayerController.getVideoSizeChangedObservable().registerObserver(this);
@@ -101,31 +106,44 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
     private void initPlaylistManager() {
         playlistManager = new PlaylistManager(mediaPlayerController);
+        playlistManager.enableLoopPlaylist(true);
         playlistManager.getTracksSetObservable().registerObserver(this);
     }
 
+    @SuppressWarnings("ConstantConditions")
     private void initMediaViews() {
-        loadingLayout = (LinearLayout) findViewById(R.id.llLoading);
-        loadingLayout.setVisibility(View.GONE);
-        errorView = (TextView) findViewById(R.id.emptyText);
-        errorView.setVisibility(View.GONE);
 
-        GuiUtils.setProgressBarColor(ContextCompat.getColor(this, R.color.progressBarColor), (ProgressBar) loadingLayout.findViewById(R.id.pbLoading));
+        if (mediaViews != null) {
+            throw new IllegalStateException("mediaViews is already initialized");
+        }
+
         FrameLayout contentLayout = (FrameLayout) findViewById(R.id.flContent);
-
         mediaViews = new MediaController(this);
-        mediaViews.setPrevNextListeners(new PreviousClickListener(), new NextClickListener());
+        mediaViews.setPrevNextListeners(new NextClickListener(), new PreviousClickListener());
         ViewGroup parent = (ViewGroup) mediaViews.getParent();
         parent.removeAllViews();
-        contentLayout.addView(mediaViews, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        lp.gravity = Gravity.BOTTOM;
+        contentLayout.addView(mediaViews, lp);
         mediaPlayerController.setMediaController(mediaViews, contentLayout);
     }
 
+    @SuppressWarnings("ConstantConditions")
     private void initSurfaceView() {
-        surfaceView = (SurfaceView) findViewById(R.id.svVideo);
+
+        if (surfaceView != null) {
+            throw new IllegalStateException("surfaceView is already initialized");
+        }
+
+        FrameLayout contentLayout = (FrameLayout) findViewById(R.id.flContent);
+        surfaceView = new SurfaceView(this);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.gravity = Gravity.CENTER;
+        contentLayout.addView(surfaceView, lp);
         surfaceView.getHolder().addCallback(this);
+        surfaceView.getHolder().setFixedSize(1, 1);
 //        surfaceView.setVisibility(View.GONE);
+        mediaPlayerController.setVideoView(surfaceView);
     }
 
     private Menu menu;
@@ -159,17 +177,17 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
             if (navigationSpinner.getSelectedItemPosition() == 0) {
                 showFileSelectDialog();
             } else {
-                showEditDialog();
+                showUrlInputDialog();
             }
             return true;
-        } else if (item.getItemId() == R.id.actionFileSelectMode) {
-            item.setChecked(!item.isChecked());
+        } else if (item.getItemId() == R.id.actionIsPlaylist) {
+            item.setChecked(!isActionPlaylistChecked(menu));
         }
         return super.onOptionsItemSelected(item);
     }
 
-    private boolean isActionFileSelectModeChecked(Menu menu) {
-        MenuItem menuItem = menu.findItem(R.id.actionFileSelectMode);
+    private boolean isActionPlaylistChecked(Menu menu) {
+        MenuItem menuItem = menu.findItem(R.id.actionIsPlaylist);
 //        // Since it is shown as an action, and not in the sub-menu we have to manually set the icon too.
 //        CheckBox cb = (CheckBox) menuItem.getActionView().findViewById(R.id.actionItemCheckbox);
 //        return cb != null && cb.isChecked();
@@ -190,26 +208,34 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        logger.debug("onCreate()");
         setContentView(R.layout.activity_test);
         initToolbar();
         initSpinner();
         initMediaController();
-        initPlaylistManager();
-        initSurfaceView();
         initMediaViews();
+        initSurfaceView();
+        initPlaylistManager();
+
+        loadingLayout = (LinearLayout) findViewById(R.id.llLoading);
+        errorView = (TextView) findViewById(R.id.emptyText);
+        GuiUtils.setProgressBarColor(ContextCompat.getColor(this, R.color.progressBarColor), (ProgressBar) loadingLayout.findViewById(R.id.pbLoading));
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        logger.debug("onResume()");
         if (mediaPlayerController.isVideoSpecified() && mediaPlayerController.getTargetState() == MediaPlayerController.State.PLAYING) {
             mediaPlayerController.start();
         }
+        invalidateByCurrentState();
     }
 
     @Override
     protected void onStop() {
         super.onStop();
+        logger.debug("onStop()");
         if (mediaPlayerController.isVideoSpecified()) {
             mediaPlayerController.pause();
         }
@@ -218,11 +244,14 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        logger.debug("onDestroy()");
 
         hideFileSelectDialog();
-        hideEditDialog();
+        hideUrlInputDialog();
 
-        surfaceView.getHolder().removeCallback(this);
+        if (surfaceView != null) {
+            surfaceView.getHolder().removeCallback(this);
+        }
 
         mediaPlayerController.getStateChangedObservable().unregisterObserver(this);
         mediaPlayerController.getErrorObservable().unregisterObserver(this);
@@ -235,14 +264,16 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
         logger.debug("onKeyDown(), keyCode=" + keyCode + ", event=" + event);
 
         boolean isKeyCodeSupported =
-                keyCode != KeyEvent.KEYCODE_VOLUME_UP &&
+                keyCode != KeyEvent.KEYCODE_BACK &&
+                        keyCode != KeyEvent.KEYCODE_VOLUME_UP &&
                         keyCode != KeyEvent.KEYCODE_VOLUME_DOWN &&
                         keyCode != KeyEvent.KEYCODE_VOLUME_MUTE &&
                         keyCode != KeyEvent.KEYCODE_MENU &&
                         keyCode != KeyEvent.KEYCODE_CALL &&
                         keyCode != KeyEvent.KEYCODE_ENDCALL;
 
-        if (mediaPlayerController.isInPlaybackState() && isKeyCodeSupported && mediaPlayerController.isMediaControllerAttached()) {
+
+        if (isKeyCodeSupported && mediaPlayerController.isInPlaybackState() && mediaPlayerController.isMediaControllerAttached()) {
 
             MediaController mediaController = mediaPlayerController.getMediaController();
 
@@ -282,7 +313,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
         logger.info("onCurrentStateChanged(), currentState=" + currentState);
         invalidateByCurrentState();
         if (currentState == MediaPlayerController.State.PLAYING) {
-            logger.debug("metadata: " + MetadataRetriever.extractMetaData(this, mediaPlayerController.getAudioUri(), null));
+            logger.debug("metadata: " + MetadataRetriever.extractMetaData(this, mediaPlayerController.isAudioSpecified() ? mediaPlayerController.getAudioUri() : mediaPlayerController.getVideoUri(), null));
         }
     }
 
@@ -302,10 +333,14 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
         MediaPlayerController.State currentState = mediaPlayerController.getCurrentState();
         if (currentState == MediaPlayerController.State.PREPARING) {
             loadingLayout.setVisibility(View.VISIBLE);
-            mediaViews.setVisibility(View.GONE);
+            if (mediaViews != null) {
+                mediaViews.setVisibility(View.GONE);
+            }
         } else {
             loadingLayout.setVisibility(View.GONE);
-            mediaViews.setVisibility(View.VISIBLE);
+            if (mediaViews != null) {
+                mediaViews.setVisibility(View.VISIBLE);
+            }
         }
 //        surfaceView.setVisibility(mediaPlayerController.isAudioSpecified() ? View.GONE : View.VISIBLE);
     }
@@ -328,10 +363,10 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     private void showFileSelectDialog() {
         if (!isFileDialogShowing()) {
 
-            final boolean fileOrFolders = isActionFileSelectModeChecked(menu);
+            final boolean isPlaylist = isActionPlaylistChecked(menu);
 
             final FileDialog fd = new FileDialog(this);
-            fd.setShowDirectoryOnly(!fileOrFolders);
+            fd.setShowDirectoryOnly(isPlaylist);
             fd.setFileSortedBy(FileDialog.SORTED_BY_NAME);
             fd.initDirectory(lastSelectedDirectory != null && FileHelper.isDirExists(lastSelectedDirectory.getAbsolutePath()) ? lastSelectedDirectory.getAbsolutePath() : Environment.getExternalStorageDirectory().toString());
             fd.addDirectoryListener(new FileDialog.DirSelectedListener() {
@@ -340,16 +375,16 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
                     if (directory != null && FileHelper.isDirExists(directory.getAbsolutePath())) {
                         lastSelectedDirectory = directory;
 
-                            if (!fileOrFolders) {
-                                List<File> folderFiles = FileHelper.getFiles(directory, false, null);
-                                List<String> filesList = new ArrayList<>();
-                                for (File f : folderFiles) {
-                                    filesList.add(f.getAbsolutePath());
-                                }
-                                playlistManager.setTracks(filesList);
-                                playlistManager.playTrack(0);
-                                hideFileSelectDialog();
+                        if (isPlaylist) {
+                            List<File> folderFiles = FileHelper.getFiles(directory, false, null);
+                            List<String> filesList = new ArrayList<>();
+                            for (File f : folderFiles) {
+                                filesList.add(f.getAbsolutePath());
                             }
+                            playlistManager.setTracks(filesList);
+                            playlistManager.playTrack(0);
+                            hideFileSelectDialog();
+                        }
                     }
                 }
             });
@@ -357,7 +392,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
                 @Override
                 public void fileSelected(File file, String[] strings, String[] strings1) {
 
-                    if (fileOrFolders) {
+                    if (!isPlaylist) {
 
                         playlistManager.clearTracks();
 
@@ -377,8 +412,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
                 }
             });
 
-            fileDialog = fd.createFileDialog();
-            fileDialog.show();
+            (fileDialog = fd.createFileDialog()).show();
         }
     }
 
@@ -389,14 +423,14 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
         }
     }
 
-    private Dialog editDialog;
+    private Dialog urlInputDialog;
 
-    private boolean isEditDialogShowing() {
-        return editDialog != null && editDialog.isShowing();
+    private boolean isUrlInputDialogShowing() {
+        return urlInputDialog != null && urlInputDialog.isShowing();
     }
 
-    private void showEditDialog() {
-        if (!isEditDialogShowing()) {
+    private void showUrlInputDialog() {
+        if (!isUrlInputDialogShowing()) {
 
             final View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_edit_url, null);
             final EditText urlView = (EditText) dialogView.findViewById(R.id.etUrl);
@@ -433,15 +467,28 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
                             return;
                         }
 
-                        if (!choiceView.isChecked()) {
-                            mediaPlayerController.setAudioPath(url);
+                        final boolean isPlaylist = isActionPlaylistChecked(menu);
+                        final boolean isVideo = choiceView.isChecked();
+
+                        if (!isPlaylist) {
+                            if (!isVideo) {
+                                mediaPlayerController.setAudioPath(url);
 //                            surfaceView.setVisibility(View.GONE);
-                        } else {
-                            mediaPlayerController.setVideoPath(url);
+                            } else {
+                                mediaPlayerController.setVideoPath(url);
 //                            surfaceView.setVisibility(View.VISIBLE);
+                            }
+                            mediaPlayerController.start();
+                            mediaPlayerController.resume();
+
+                        } else {
+//                            if (isVideo != (playlistManager.getPlayMode() == PlaylistManager.PlayMode.VIDEO)) {
+//                                playlistManager.clearTracks();
+//                            }
+                            playlistManager.setPlayMode(isVideo? PlaylistManager.PlayMode.VIDEO : PlaylistManager.PlayMode.AUDIO);
+                            playlistManager.addTrack(url);
+                            playlistManager.playLastTrack();
                         }
-                        mediaPlayerController.start();
-                        mediaPlayerController.resume();
                     }
 
                 }
@@ -449,10 +496,10 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
         }
     }
 
-    private void hideEditDialog() {
-        if (isEditDialogShowing()) {
-            editDialog.hide();
-            editDialog = null;
+    private void hideUrlInputDialog() {
+        if (isUrlInputDialogShowing()) {
+            urlInputDialog.hide();
+            urlInputDialog = null;
         }
     }
 
@@ -468,22 +515,29 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     @Override
     public void onVideoSizeChanged(int width, int height) {
         logger.debug("onVideoSizeChanged(), width=" + width + ", height=" + height);
-        GuiUtils.setViewSize(surfaceView, GuiUtils.getSurfaceViewSizeByDisplaySize(this, (float) width / (float) height));
+        if (width > 0 && height > 0) {
+            Display display = ((WindowManager) (getSystemService(Context.WINDOW_SERVICE))).getDefaultDisplay();
+            DisplayMetrics displayMetrics = new DisplayMetrics();
+            display.getMetrics(displayMetrics);
+            GuiUtils.setViewSize(surfaceView, GuiUtils.getSurfaceViewSizeByPreviewSize(new Point(displayMetrics.widthPixels, displayMetrics.heightPixels), new Point(width, height), displayMetrics.widthPixels, GuiUtils.FitSize.FIT_WIDTH)); // getSurfaceViewSizeByDisplaySize(this, (float) width / (float) height)
+        } else {
+            GuiUtils.setViewSize(surfaceView, new Point(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
     }
 
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
-
+        logger.debug("surfaceCreated()");
     }
 
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-
+        logger.debug("surfaceChanged(), format=" + format + ", width=" + width + ", height=" + height);
     }
 
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
-
+        logger.debug("surfaceDestroyed()");
     }
 
     @Override

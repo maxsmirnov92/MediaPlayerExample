@@ -11,12 +11,12 @@
     </item>
 
     <item
-        android:id="@+id/actionFileSelectMode"
+        android:id="@+id/actionIsPlaylist"
         android:orderInCategory="2"
         android:checkable="true"
-        android:title="@string/action_file_select_mode"
+        android:title="@string/action_is_playlist"
         android:actionViewClass="android.widget.CheckBox"
-        app:showAsAction="ifRoom">
+        app:showAsAction="never">
         <!--app:actionViewClass="android.widget.CheckBox"-->
     </item>
 
