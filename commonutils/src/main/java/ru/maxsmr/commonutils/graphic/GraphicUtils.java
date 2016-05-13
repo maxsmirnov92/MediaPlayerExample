@@ -2,6 +2,7 @@ package ru.maxsmr.commonutils.graphic;
 
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -25,6 +26,7 @@ import android.os.Build;
 import android.provider.MediaStore;
 import android.support.annotation.ColorInt;
 import android.support.annotation.DrawableRes;
+import android.support.annotation.NonNull;
 import android.support.v7.graphics.Palette;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
@@ -37,6 +39,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -585,6 +588,24 @@ public class GraphicUtils {
         return getVideoDuration(file) > 0;
     }
 
+    public static Bitmap createBitmapFromStream(InputStream is, int scale) {
+        return createBitmapByByteArray(FileHelper.readBytesFromInputStream(is), scale);
+    }
+
+    public static Bitmap createBitmapFromUri(@NonNull Context context, Uri uri, int scale) {
+
+        if (!(uri != null && (uri.getScheme() == null || uri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_FILE)))) {
+            logger.error("incorrect resource uri: " + uri);
+            return null;
+        }
+
+        try {
+            return createBitmapFromStream((context.getContentResolver().openInputStream(uri)), scale);
+        } catch (FileNotFoundException e) {
+            return null;
+        }
+    }
+
     public static Bitmap createBitmapFromFile(File file, int scale) {
 
         if (!FileHelper.isFileCorrect(file) || !FileHelper.isPicture(FileHelper.getFileExtension(file.getName()))) {
@@ -629,8 +650,8 @@ public class GraphicUtils {
             return null;
         }
 
-        widthPixels = widthPixels > 0 ? widthPixels : d.getMinimumWidth();
-        heightPixels = heightPixels > 0 ? heightPixels : d.getMinimumHeight();
+        widthPixels = widthPixels > 0 ? widthPixels : d.getIntrinsicWidth();
+        heightPixels = heightPixels > 0 ? heightPixels : d.getIntrinsicHeight();
 
         if (widthPixels <= 0 || heightPixels <= 0) {
             logger.error("incorrect bounds: " + widthPixels + "x" + heightPixels);

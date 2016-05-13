@@ -20,5 +20,13 @@
         <!--app:actionViewClass="android.widget.CheckBox"-->
     </item>
 
+    <item
+        android:id="@+id/actionQuit"
+        android:icon="@android:drawable/ic_menu_close_clear_cancel"
+        android:orderInCategory="3"
+        android:title="@string/action_quit"
+        app:showAsAction="ifRoom">
+    </item>
+
 
 </menu>

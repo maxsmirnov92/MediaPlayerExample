@@ -1,8 +1,10 @@
 package ru.maxsmr.mediaplayerexample;
 
 import android.app.Dialog;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.net.Uri;
 import android.os.Bundle;
@@ -173,17 +175,28 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == R.id.actionAddTrack) {
-            if (navigationSpinner.getSelectedItemPosition() == 0) {
-                showFileSelectDialog();
-            } else {
-                showUrlInputDialog();
-            }
-            return true;
-        } else if (item.getItemId() == R.id.actionIsPlaylist) {
-            item.setChecked(!isActionPlaylistChecked(menu));
+
+        boolean consumed = false;
+
+        switch (item.getItemId()) {
+            case R.id.actionAddTrack:
+                if (navigationSpinner.getSelectedItemPosition() == 0) {
+                    showFileSelectDialog();
+                } else {
+                    showUrlInputDialog();
+                }
+                consumed = true;
+                break;
+            case R.id.actionIsPlaylist:
+                item.setChecked(!isActionPlaylistChecked(menu));
+                consumed = true;
+                break;
+            case R.id.actionQuit:
+                finish();
+                break;
         }
-        return super.onOptionsItemSelected(item);
+
+        return consumed || super.onOptionsItemSelected(item);
     }
 
     private boolean isActionPlaylistChecked(Menu menu) {
@@ -253,6 +266,8 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
             surfaceView.getHolder().removeCallback(this);
         }
 
+        playlistManager.release();
+
         mediaPlayerController.getStateChangedObservable().unregisterObserver(this);
         mediaPlayerController.getErrorObservable().unregisterObserver(this);
         mediaPlayerController.release();
@@ -313,7 +328,14 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
         logger.info("onCurrentStateChanged(), currentState=" + currentState);
         invalidateByCurrentState();
         if (currentState == MediaPlayerController.State.PLAYING) {
-            logger.debug("metadata: " + MetadataRetriever.extractMetaData(this, mediaPlayerController.isAudioSpecified() ? mediaPlayerController.getAudioUri() : mediaPlayerController.getVideoUri(), null));
+            Uri uri = mediaPlayerController.isAudioSpecified() ? mediaPlayerController.getAudioUri() : mediaPlayerController.getVideoUri();
+            if (uri != null) {
+                logger.debug("metadata: " + MetadataRetriever.extractMetaData(this, uri, null));
+                Bitmap albumArt = MetadataRetriever.extractAlbumArt(this, new Uri.Builder().scheme(ContentResolver.SCHEME_CONTENT).appendEncodedPath(uri.getPath()).build());
+                if (albumArt != null) {
+                    albumArt.recycle();
+                }
+            }
         }
     }
 
@@ -412,15 +434,17 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
                 }
             });
 
-            (fileDialog = fd.createFileDialog()).show();
+            fileDialog = fd.createFileDialog();
+//            ((android.app.AlertDialog) fileDialog).setView(LayoutInflater.from(this).inflate(R.layout.layout_checked_text, null));
+            fileDialog.show();
         }
     }
 
     private void hideFileSelectDialog() {
         if (isFileDialogShowing()) {
             fileDialog.hide();
-            fileDialog = null;
         }
+        fileDialog = null;
     }
 
     private Dialog urlInputDialog;
@@ -471,6 +495,9 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
                         final boolean isVideo = choiceView.isChecked();
 
                         if (!isPlaylist) {
+
+                            playlistManager.clearTracks();
+
                             if (!isVideo) {
                                 mediaPlayerController.setAudioPath(url);
 //                            surfaceView.setVisibility(View.GONE);
@@ -499,13 +526,13 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     private void hideUrlInputDialog() {
         if (isUrlInputDialogShowing()) {
             urlInputDialog.hide();
-            urlInputDialog = null;
         }
+        urlInputDialog = null;
     }
 
     @Override
     public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-        mediaPlayerController.stop();
+//        mediaPlayerController.stop();
     }
 
     @Override

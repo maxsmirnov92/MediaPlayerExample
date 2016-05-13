@@ -15,17 +15,7 @@
         android:textSize="16sp"
         android:inputType="textUri"/>
 
-    <CheckedTextView
-        android:id="@+id/tvUrlChoice"
-        android:layout_margin="10dp"
-        android:checkMark="@drawable/selector_checkbox"
-        android:layout_below="@+id/etUrl"
-        android:layout_width="wrap_content"
-        android:text="@string/dialog_url_type_text"
-        android:layout_alignParentEnd="true"
-        android:layout_alignParentRight="true"
-        android:textSize="16sp"
-        android:layout_height="wrap_content"/>
+        <include layout="@layout/layout_checked_text"/>
 
     <!--android:drawableLeft="@android:drawable/checkbox_on_background"-->
     <!--android:drawableStart="@android:drawable/checkbox_on_background"-->

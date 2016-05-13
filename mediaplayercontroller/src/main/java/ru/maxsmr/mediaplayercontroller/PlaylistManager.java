@@ -59,9 +59,11 @@ public class PlaylistManager {
             if (isFile && FileHelper.isFileCorrect(new File(uri.getPath()))) {
                 String mimeType = HttpsURLConnection.guessContentTypeFromName(uriString);
                 return isFileMimeTypeValid(mimeType);
-            } else {
-                return uri.getScheme().equalsIgnoreCase("http") || uri.getScheme().equalsIgnoreCase("https");
-            }
+            } else
+                return uri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_CONTENT)
+                        || uri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_ANDROID_RESOURCE)
+                        || uri.getScheme().equalsIgnoreCase("http")
+                        || uri.getScheme().equalsIgnoreCase("https");
         }
         return false;
     }
@@ -344,7 +346,7 @@ public class PlaylistManager {
     }
 
     /**
-     * @param trackUrls null for reset adapter
+     * @param trackUrls null for reset playlist
      */
     public final synchronized void setTracks(@Nullable Collection<String> trackUrls) {
         clearTracks();
@@ -488,7 +490,7 @@ public class PlaylistManager {
                 String currentTrackUriString = currentTrackUri != null? currentTrackUri.toString() : null;
                 if (!TextUtils.isEmpty(currentTrackUriString)) {
                     if (indexOf(currentTrackUriString) == NO_POSITION) {
-                        throw new IllegalStateException("no track " + currentTrackUriString + " found in playlist!");
+                        throw new IllegalStateException("track " + currentTrackUriString + " not found in playlist!");
                     }
                 } else {
                     mCurrentTrackIndex = NO_POSITION;

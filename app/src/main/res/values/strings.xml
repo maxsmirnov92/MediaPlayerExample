@@ -3,6 +3,7 @@
 
     <string name="action_add_resource">Add resource</string>
     <string name="action_is_playlist">Is playlist</string>
+    <string name="action_quit">Quit</string>
 
     <string name="dialog_url_title">Input streaming URL</string>
     <string name="dialog_url_type_text">Is video</string>

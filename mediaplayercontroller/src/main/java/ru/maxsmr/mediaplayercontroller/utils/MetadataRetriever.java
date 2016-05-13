@@ -1,10 +1,14 @@
 package ru.maxsmr.mediaplayercontroller.utils;
 
 import android.content.ContentResolver;
+import android.content.ContentUris;
 import android.content.Context;
+import android.database.Cursor;
+import android.graphics.Bitmap;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Build;
+import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.text.TextUtils;
@@ -16,6 +20,7 @@ import java.io.File;
 import java.util.Map;
 
 import ru.maxsmr.commonutils.data.FileHelper;
+import ru.maxsmr.commonutils.graphic.GraphicUtils;
 
 public final class MetadataRetriever {
 
@@ -40,6 +45,7 @@ public final class MetadataRetriever {
         return !TextUtils.isEmpty(url) ? extractMetaData(null, Uri.parse(url), headers) : new MediaMetadata();
     }
 
+    @SuppressWarnings("ConstantConditions")
     @NonNull
     public static MediaMetadata extractMetaData(@Nullable Context context, @Nullable Uri resourceUri, @Nullable Map<String, String> headers) {
 
@@ -109,6 +115,7 @@ public final class MetadataRetriever {
         }
     }
 
+    @Nullable
     private static <M> M extractMetadataFieldNoThrow(@NonNull MediaMetadataRetriever retriever, int keyCode, @NonNull Class<M> clazz) {
         return extractMetadataFieldNoThrow(retriever, keyCode, clazz, null);
     }
@@ -123,20 +130,20 @@ public final class MetadataRetriever {
                 return !isEmpty ? (M) value : defaultValue;
             } else if (clazz.isAssignableFrom(Long.class)) {
                 try {
-                    return !isEmpty ? (M) Long.valueOf(value) : (defaultValue != null? defaultValue : (M) Long.valueOf(0));
+                    return !isEmpty ? (M) Long.valueOf(value) : (defaultValue != null ? defaultValue : (M) Long.valueOf(0));
                 } catch (NumberFormatException e) {
                     e.printStackTrace();
                     return defaultValue;
                 }
             } else if (clazz.isAssignableFrom(Integer.class)) {
                 try {
-                    return !isEmpty ? (M) Integer.valueOf(value) : (defaultValue != null? defaultValue : (M) Integer.valueOf(0));
+                    return !isEmpty ? (M) Integer.valueOf(value) : (defaultValue != null ? defaultValue : (M) Integer.valueOf(0));
                 } catch (NumberFormatException e) {
                     e.printStackTrace();
                     return defaultValue;
                 }
             } else if (clazz.isAssignableFrom(Boolean.class)) {
-                return !isEmpty ? (M) Boolean.valueOf(value) : (defaultValue != null? defaultValue : (M) Boolean.valueOf(false));
+                return !isEmpty ? (M) Boolean.valueOf(value) : (defaultValue != null ? defaultValue : (M) Boolean.valueOf(false));
             } else {
                 throw new UnsupportedOperationException("incorrect class: " + clazz);
             }
@@ -147,58 +154,90 @@ public final class MetadataRetriever {
         }
     }
 
+    @Nullable
+    public static Bitmap extractAlbumArt(@NonNull Context context, @Nullable Uri resourceUri) {
+
+        if (resourceUri == null) {
+            return null;
+        }
+
+        if (!ContentResolver.SCHEME_CONTENT.equalsIgnoreCase(resourceUri.getScheme())) {
+            throw new IllegalArgumentException("incorrect uri scheme: " + resourceUri.getScheme() + ", must be " + ContentResolver.SCHEME_CONTENT);
+        }
+
+        String[] projections = {MediaStore.Audio.Media.ALBUM_ID};
+
+        Cursor cursor = null;
+        try {
+            cursor = context.getContentResolver().query(resourceUri, projections, null, null, null);
+            if (cursor != null && cursor.isClosed() && cursor.getCount() > 0) {
+                Long albumId = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID));
+                cursor.moveToFirst();
+                Uri coverUri = Uri.parse("content://media/external/audio/albumart");
+                Uri trackCoverUri = ContentUris.withAppendedId(coverUri, albumId);
+                return GraphicUtils.createBitmapFromUri(context, trackCoverUri, 1);
+            }
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+        }
+
+        return null;
+    }
+
 
     public static class MediaMetadata {
 
-        long duration;
+        public long duration;
 
-        String cdTrackNumber;
+        public String cdTrackNumber;
 
-        String album;
+        public String album;
 
-        String artist;
+        public String artist;
 
-        String author;
+        public String author;
 
-        String composer;
+        public String composer;
 
-        String date;
+        public String date;
 
-        String genre;
+        public String genre;
 
-        String title;
+        public String title;
 
-        int year;
+        public int year;
 
-        int numTracks;
+        public int numTracks;
 
-        String writer;
+        public String writer;
 
-        String mimeType;
+        public String mimeType;
 
-        String albumArtist;
+        public String albumArtist;
 
-        String compilation;
+        public String compilation;
 
-        boolean hasAudio;
+        public boolean hasAudio;
 
-        boolean hasVideo;
+        public boolean hasVideo;
 
-        int videoWidth;
+        public int videoWidth;
 
-        int videoHeight;
+        public int videoHeight;
 
-        int bitrate;
+        public int bitrate;
 
-        String timedTextLanguages;
+        public String timedTextLanguages;
 
-        boolean isDrm;
+        public boolean isDrm;
 
-        String location;
+        public String location;
 
-        int videoRotation;
+        public int videoRotation;
 
-        int captureFrameRate;
+        public int captureFrameRate;
 
         @Override
         public String toString() {

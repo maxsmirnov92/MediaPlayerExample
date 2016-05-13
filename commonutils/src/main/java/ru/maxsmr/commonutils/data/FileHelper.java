@@ -352,31 +352,38 @@ public class FileHelper {
             return null;
         }
 
-        FileInputStream inStream = null;
-
         try {
-            inStream = new FileInputStream(file);
+            return readBytesFromInputStream(new FileInputStream(file));
+        } catch (IOException e) {
+            return null;
+        }
+    }
 
-            byte[] data = new byte[inStream.available()];
-            int readByteCount = 0;
-            do {
-                readByteCount = inStream.read(data, 0, data.length);
-            } while (readByteCount > 0);
+    public static byte[] readBytesFromInputStream(InputStream inputStream) {
 
-            return data;
+        if (inputStream != null) {
 
-        } catch (Exception e) {
-            logger.error("an Exception occurred", e);
-        } finally {
-            if (inStream != null) {
-                try {
-                    inStream.close();
-                } catch (IOException e) {
-                    logger.error("an IOException occurred during close()", e);
-                }
-                inStream = null;
+            try {
+
+                byte[] data = new byte[inputStream.available()];
+                int readByteCount = 0;
+                do {
+                    readByteCount = inputStream.read(data, 0, data.length);
+                } while (readByteCount > 0);
+
+                return data;
+
+            } catch (Exception e) {
+                logger.error("an Exception occurred", e);
+            } finally {
+                    try {
+                        inputStream.close();
+                    } catch (IOException e) {
+                        logger.error("an IOException occurred during close()", e);
+                    }
             }
         }
+
         return null;
     }
 

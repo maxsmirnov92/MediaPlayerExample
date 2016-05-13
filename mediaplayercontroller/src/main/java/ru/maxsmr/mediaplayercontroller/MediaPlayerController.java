@@ -317,6 +317,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
         @Override
         public void onHeadphonesPlugged(boolean hasMicrophone) {
+            logger.debug("onHeadphonesPlugged(), hasMicrophone=" + hasMicrophone);
             if (mTargetState == State.PLAYING) {
                 start();
             }
@@ -324,7 +325,12 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
         @Override
         public void onHeadphonesUnplugged() {
+            logger.debug("onHeadphonesUnplugged()");
+            State oldState = getCurrentState();
             pause();
+            if (oldState == State.PLAYING) {
+                setTargetState(State.PLAYING);
+            }
         }
     };
 
@@ -846,8 +852,6 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
             AudioManager am = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
             am.abandonAudioFocus(null);
-
-            detachMediaController();
         }
     }
 
@@ -858,6 +862,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         }
 
         releasePlayer(true);
+        detachMediaController();
 
         mHeadsetPlugBroadcastReceiver.getHeadsetStateChangedObservable().unregisterObserver(mHeadsetStateChangeListener);
         mHeadsetPlugBroadcastReceiver.unregister(mContext);
