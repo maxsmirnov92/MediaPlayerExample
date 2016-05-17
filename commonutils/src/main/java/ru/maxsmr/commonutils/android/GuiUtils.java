@@ -400,11 +400,11 @@ public class GuiUtils {
     }
 
     @NonNull
-    public static Point getSurfaceViewSizeByPreviewSize(@NonNull Point viewSize, @NonNull Point previewSize, int limitSize, @NonNull FitSize fitSize) {
+    public static Point getSurfaceViewSizeByPreviewSize(@NonNull Point previewSize, int limitSize, @NonNull FitSize fitSize) {
 
-        if (viewSize.x <= 0 || viewSize.y <= 0) {
-            throw new IllegalArgumentException("incorrect view size: " + viewSize.x + "x" + viewSize.y);
-        }
+//        if (viewSize.x <= 0 || viewSize.y <= 0) {
+//            throw new IllegalArgumentException("incorrect view size: " + viewSize.x + "x" + viewSize.y);
+//        }
 
         if (previewSize.x <= 0 || previewSize.y <= 0) {
             throw new IllegalArgumentException("incorrect preview size: " + previewSize.x + "x" + previewSize.y);
@@ -423,13 +423,13 @@ public class GuiUtils {
             case FIT_WIDTH:
                 previewProportion = (float) previewSize.x / (float) previewSize.y;
                 newWidth = limitSize;
-                newHeight = Math.round((float) viewSize.x / previewProportion);
+                newHeight = Math.round((float) newWidth / previewProportion);
                 break;
 
             case FIT_HEIGHT:
                 previewProportion = (float) previewSize.y / (float) previewSize.x;
                 newHeight = limitSize;
-                newWidth = Math.round((float) viewSize.y / previewProportion);
+                newWidth = Math.round((float) newHeight * previewProportion);
                 break;
 
             default:

@@ -546,7 +546,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
             Display display = ((WindowManager) (getSystemService(Context.WINDOW_SERVICE))).getDefaultDisplay();
             DisplayMetrics displayMetrics = new DisplayMetrics();
             display.getMetrics(displayMetrics);
-            GuiUtils.setViewSize(surfaceView, GuiUtils.getSurfaceViewSizeByPreviewSize(new Point(displayMetrics.widthPixels, displayMetrics.heightPixels), new Point(width, height), displayMetrics.widthPixels, GuiUtils.FitSize.FIT_WIDTH)); // getSurfaceViewSizeByDisplaySize(this, (float) width / (float) height)
+            GuiUtils.setViewSize(surfaceView, GuiUtils.getSurfaceViewSizeByPreviewSize(new Point(width, height), displayMetrics.widthPixels, GuiUtils.FitSize.FIT_WIDTH)); // getSurfaceViewSizeByDisplaySize(this, (float) width / (float) height)
         } else {
             GuiUtils.setViewSize(surfaceView, new Point(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         }

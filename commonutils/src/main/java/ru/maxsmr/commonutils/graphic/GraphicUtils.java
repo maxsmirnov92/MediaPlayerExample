@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.Random;
 
 import ru.maxsmr.commonutils.data.FileHelper;
+import ru.maxsmr.commonutils.data.MetadataRetriever;
 
 public class GraphicUtils {
 
@@ -84,43 +85,11 @@ public class GraphicUtils {
             return 0;
         }
 
-        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-        // AssetFileDescriptor afd = null;
-
-        try {
-            // afd = ctx.getAssets().openFd(videoFile.getAbsolutePath());
-            // retriever.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
-            retriever.setDataSource(videoFile.getAbsolutePath());
-
-            try {
-                return Long.parseLong(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION));
-
-            } catch (NumberFormatException e) {
-                logger.error("a NumberFormatException occurred during parseInt(): " + e.getMessage());
-                return 0;
-            }
-
-        } catch (IllegalArgumentException e) {
-            logger.error("an IllegalArgumentException occurred: " + e.getMessage());
-        } catch (RuntimeException e) {
-            logger.error("a RuntimeException occurred: " + e.getMessage());
-        } finally {
-
-            try {
-                retriever.release();
-                retriever = null;
-            } catch (RuntimeException e) {
-                logger.debug("a RuntimeException occurred during release(): " + e.getMessage());
-            }
-
-        }
-
-        logger.error("can't retrieve duration of video file " + videoFile + " (size: " + videoFile.length() / 1024 + " kB)");
-        return 0;
+        Integer duration = MetadataRetriever.extractMetaDataField(videoFile, MediaMetadataRetriever.METADATA_KEY_DURATION, Integer.class);
+        return duration != null? duration : 0;
     }
 
     public static Bitmap getVideoFrameAtPosition(File videoFile, long positionMs) {
-        // logger.debug("getVideoFrameAtPosition(), positionMs=" + positionMs);
 
         if (!(FileHelper.isFileCorrect(videoFile) && FileHelper.isVideo(FileHelper.getFileExtension(videoFile.getName())))) {
             logger.error("incorrect video file: " + videoFile);
@@ -132,35 +101,8 @@ public class GraphicUtils {
             return null;
         }
 
-        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-        // AssetFileDescriptor afd = null;
-
-        try {
-            // afd = ctx.getAssets().openFd(videoFile.getAbsolutePath());
-            // retriever.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
-
-            retriever.setDataSource(videoFile.getAbsolutePath());
-
-            return retriever.getFrameAtTime(positionMs * 1000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
-
-        } catch (IllegalArgumentException e) {
-            logger.error("an IllegalArgumentException occurred: " + e.getMessage());
-        } catch (RuntimeException e) {
-            logger.error("a RuntimeException occurred: " + e.getMessage());
-            // } catch (IOException e) {
-            // logger.error("an IOException occurred: " + e.getMessage());
-        } finally {
-            try {
-                retriever.release();
-            } catch (RuntimeException e) {
-                logger.error("a RuntimeException occurred during release(): " + e.getMessage());
-            }
-        }
-
-        logger.error("can't retrieve frame from video " + videoFile + " at " + positionMs + " ms");
-        return null;
+        return MetadataRetriever.extractFrame(videoFile, positionMs);
     }
-
     public static List<Pair<Long, Bitmap>> getVideoFrames(File videoFile, int framesCount) {
         // logger.debug("getVideoFrames(), videoFile=" + videoFile + ", framesCount=" + framesCount);
 

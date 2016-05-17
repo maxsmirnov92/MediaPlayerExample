@@ -4,6 +4,8 @@ import android.annotation.TargetApi;
 import android.content.ContentUris;
 import android.content.Context;
 import android.database.Cursor;
+import android.location.Location;
+import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -29,6 +31,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
+import java.lang.reflect.Field;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -65,7 +68,6 @@ public class FileHelper {
     }
 
     public static boolean isFileExists(String fileName, String parentPath) {
-        // logger.debug("isFileExists(), fileName=" + fileName + ", parentPath=" + parentPath);
 
         if (fileName == null || fileName.length() == 0 || fileName.contains("/")) {
             return false;
@@ -83,9 +85,6 @@ public class FileHelper {
         }
 
         File f = new File(parentDir, fileName);
-
-        // logger.debug("f: " + f + ", exists: " + f.exists() + ", file: " + f.isFile());
-
         return (f.exists() && f.isFile());
     }
 
@@ -145,8 +144,7 @@ public class FileHelper {
                 return true;
             }
         } catch (IOException e) {
-//            e.printStackTrace();
-//            logger.error("an IOException occurred during release()", e);
+            e.printStackTrace();
         }
         return false;
     }
@@ -226,31 +224,76 @@ public class FileHelper {
         return f;
     }
 
+    @Nullable
+    public static File createNewFile(String fileName, String parentPath, boolean recreate) {
+
+        if (TextUtils.isEmpty(fileName)) {
+            return null;
+        }
+
+        if (TextUtils.isEmpty(parentPath)) {
+            return null;
+        }
+
+        File f = new File(parentPath, fileName);
+
+        if (f.exists() && f.isFile()) {
+
+            if (recreate) {
+
+                if (f.delete()) {
+
+                    f = FileHelper.createNewFile(f.getName(), f.getParent());
+
+                    if (f == null) {
+                        logger.error("can't create new file " + fileName + " in directory "  + parentPath);
+                        return null;
+                    }
+
+                } else {
+                    logger.error("can't delete existing file");
+                    return f;
+                }
+
+            } else {
+                logger.error("not overwriting, existing");
+                return f;
+            }
+
+        } else {
+
+            f = FileHelper.createNewFile(f.getName(), f.getParent());
+
+            if (f == null) {
+                logger.error("can't create new file " + fileName + " in directory "  + parentPath);
+                return null;
+            }
+        }
+
+        return f;
+    }
+
+    @SuppressWarnings("ResultOfMethodCallIgnored")
     public static File createNewFile(String fileName, String parentPath) {
-        // logger.debug("createNewFile(), fileName=" + fileName + ", parentPath=" + parentPath);
 
-        if (fileName == null || fileName.length() == 0 || fileName.contains("/")) {
+        if (TextUtils.isEmpty(fileName) || fileName.contains("/")) {
             return null;
         }
 
-        if (parentPath == null || parentPath.length() == 0) {
+        if (TextUtils.isEmpty(parentPath)) {
             return null;
-        }
-
-        File parentDir = new File(parentPath);
-        if (!parentDir.mkdirs()) {
-            // logger.debug("no directories created to: " + parentDir.getAbsolutePath());
         }
 
         File newFile = null;
 
+        File parentDir = new File(parentPath);
+        parentDir.mkdirs();
+
         if (parentDir.exists() && parentDir.isDirectory()) {
-            // logger.debug("directory " + parentDir.getAbsolutePath() + " exists");
 
             newFile = new File(parentDir, fileName);
 
             if (newFile.exists() && newFile.isFile()) {
-                // logger.debug("file " + newFile.getName() + "already exists, deleting..");
                 if (!newFile.delete()) {
                     logger.error("can't delete");
                     return null;
@@ -481,7 +524,6 @@ public class FileHelper {
     }
 
     public static File writeStringToFile(String data, String fileName, String parentPath, boolean append) {
-        // logger.debug("writeStringToFile(), data=" + data + ", fileName=" + fileName + ", parentPath=" + parentPath);
 
         if (data == null || data.isEmpty()) {
             logger.error("data is null or empty");
@@ -1271,17 +1313,45 @@ public class FileHelper {
         return (Runtime.getRuntime().exec("chmod " + mode + " " + destFilePath).waitFor() == 0);
     }
 
+    public static boolean copyFromAssets(Context ctx, String assetsPath, File to, boolean rewrite) {
+
+        to = FileHelper.createNewFile(to != null? to.getName() : null, to != null? to.getParent() : null, rewrite);
+
+        if (to == null) {
+            return false;
+        }
+
+        FileOutputStream out = null;
+        InputStream in = null;
+        try {
+            out = new FileOutputStream(to);
+            in = ctx.getAssets().open(assetsPath);
+            return FileHelper.revectorStream(in, out);
+        } catch (IOException e) {
+            logger.error("an IOException occurred", e);
+            return false;
+        } finally {
+            try {
+                if (out != null)
+                    out.close();
+                if (in != null)
+                    in.close();
+            } catch (IOException e) {
+                logger.error("an IOException occurred during close()", e);
+            }
+        }
+    }
+
     /**
-     *
      * @return dest file
      */
-    public static File copyFile(File sourceFile, String destDir) {
+    public static File copyFile(File sourceFile, String destDir, boolean rewrite) {
 
         if (!isFileCorrect(sourceFile)) {
             throw new IllegalArgumentException("incorrect source file: "+ sourceFile);
         }
 
-        File destFile = createNewFile(sourceFile.getName(), destDir);
+        File destFile = createNewFile(sourceFile.getName(), destDir, rewrite);
 
         if (destFile == null) {
             throw new IllegalArgumentException("can't create dest file");
@@ -1294,6 +1364,68 @@ public class FileHelper {
         }
 
         return destFile;
+    }
+
+    public static boolean writeExifLocation(File f, Location loc) {
+
+        if (!FileHelper.isFileCorrect(f) || !FileHelper.isPicture(FileHelper.getFileExtension(f.getName()))) {
+            logger.error("incorrect picture file: " + f);
+            return false;
+        }
+
+        if (loc == null) {
+            logger.warn("location is null");
+            return false;
+        }
+
+        try {
+
+            ExifInterface exif = new ExifInterface(f.getAbsolutePath());
+
+            if (!CompareUtils.doubleEqual(loc.getLatitude(), 0.0d) || !CompareUtils.doubleEqual(loc.getLongitude(), 0.0d)) {
+                exif.setAttribute(ExifInterface.TAG_GPS_LATITUDE, String.valueOf(loc.getLatitude()));
+                exif.setAttribute(ExifInterface.TAG_GPS_LONGITUDE, String.valueOf(loc.getLongitude()));
+            }
+            exif.setAttribute(ExifInterface.TAG_GPS_ALTITUDE, String.valueOf(loc.getAltitude()));
+
+            exif.setAttribute(ExifInterface.TAG_GPS_PROCESSING_METHOD, String.valueOf(loc.getProvider()));
+
+            exif.saveAttributes();
+            return true;
+
+        } catch (IOException e) {
+            logger.error("an IOException occurred", e);
+            return false;
+        }
+    }
+
+    /**
+     * @param id      the constant value of resource subclass field
+     * @param resType subclass where the static final field with given id value declared
+     * @throws IllegalArgumentException
+     * @throws IllegalAccessException
+     */
+    public static boolean checkResourceIdExists(int id, Class<?> resType) throws NullPointerException, IllegalArgumentException, IllegalAccessException {
+
+        if (resType == null)
+            throw new NullPointerException("resType is null");
+
+        Field[] fields = resType.getDeclaredFields();
+
+        if (fields == null || fields.length == 0)
+            return false;
+
+        for (Field field : fields) {
+            field.setAccessible(true);
+            try {
+                if (field.getInt(null) == id)
+                    return true;
+            } catch (Exception e) {
+                logger.error("an Exception occurred during getInt()");
+            }
+        }
+
+        return false;
     }
 
 }

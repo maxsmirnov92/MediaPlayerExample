@@ -27,7 +27,7 @@ public class CompareUtils {
             one = one != null ? Character.toUpperCase(one) : null;
             another = another != null ? Character.toUpperCase(another) : null;
         }
-        return one != null ? one.equals(another) : another != null;
+        return one != null ? one.equals(another) : another == null;
     }
 
     public static boolean stringsEqual(@Nullable String one, @Nullable String another, boolean ignoreCase) {

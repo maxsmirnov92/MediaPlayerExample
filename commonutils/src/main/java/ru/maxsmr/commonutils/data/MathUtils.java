@@ -4,6 +4,13 @@ import java.util.Random;
 
 public class MathUtils {
 
+    public static int safeLongToInt(long l) {
+        if (l < Integer.MIN_VALUE || l > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(l + " cannot be cast to int without changing its value.");
+        }
+        return (int) l;
+    }
+
     public static double round(double value, int precision) {
         if (precision < 0) {
             throw new IllegalArgumentException("incorrect precision: "+ precision);
