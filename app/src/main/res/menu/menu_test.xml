@@ -21,9 +21,29 @@
     </item>
 
     <item
+        android:id="@+id/actionLooping"
+        android:orderInCategory="3"
+        android:checkable="true"
+        android:title="@string/action_looping"
+        android:actionViewClass="android.widget.CheckBox"
+        app:showAsAction="never">
+        <!--app:actionViewClass="android.widget.CheckBox"-->
+    </item>
+
+    <item
+        android:id="@+id/actionEnableScrobbling"
+        android:orderInCategory="4"
+        android:checkable="true"
+        android:title="@string/action_enable_scrobbling"
+        android:actionViewClass="android.widget.CheckBox"
+        app:showAsAction="never">
+        <!--app:actionViewClass="android.widget.CheckBox"-->
+    </item>
+
+    <item
         android:id="@+id/actionQuit"
         android:icon="@android:drawable/ic_menu_close_clear_cancel"
-        android:orderInCategory="3"
+        android:orderInCategory="5"
         android:title="@string/action_quit"
         app:showAsAction="ifRoom">
     </item>

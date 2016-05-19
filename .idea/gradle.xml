@@ -11,6 +11,7 @@
             <option value="$PROJECT_DIR$/app" />
             <option value="$PROJECT_DIR$/commonutils" />
             <option value="$PROJECT_DIR$/mediaplayercontroller" />
+            <option value="$PROJECT_DIR$/tasksutils" />
           </set>
         </option>
         <option name="myModules">
@@ -19,6 +20,7 @@
             <option value="$PROJECT_DIR$/app" />
             <option value="$PROJECT_DIR$/commonutils" />
             <option value="$PROJECT_DIR$/mediaplayercontroller" />
+            <option value="$PROJECT_DIR$/tasksutils" />
           </set>
         </option>
       </GradleProjectSettings>

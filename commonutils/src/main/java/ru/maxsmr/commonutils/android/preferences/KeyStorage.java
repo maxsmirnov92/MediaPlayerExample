@@ -1,7 +1,7 @@
 package ru.maxsmr.commonutils.android.preferences;
 
-import java.util.List;
+import java.util.Set;
 
 public interface KeyStorage {
-    List<String> getKeys();
+    Set<String> getKeys();
 }

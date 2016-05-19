@@ -24,6 +24,7 @@ import java.util.Set;
 import javax.net.ssl.HttpsURLConnection;
 
 import ru.maxsmr.commonutils.data.FileHelper;
+import ru.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
 
 public class PlaylistManager {
 
@@ -33,13 +34,33 @@ public class PlaylistManager {
 
     public final static int NO_POSITION = -1;
 
+    public static final String[] DEFAULT_ACCEPTABLE_FILE_MIME_TYPES_PARTS = new String[] {"audio", "video"};
+
     private static final Set<String> acceptableFileMimeTypesParts = new HashSet<>();
 
     static {
-        acceptableFileMimeTypesParts.add("audio");
-        acceptableFileMimeTypesParts.add("video");
+        for (String defPart : DEFAULT_ACCEPTABLE_FILE_MIME_TYPES_PARTS) {
+            acceptableFileMimeTypesParts.add(defPart);
+        }
     }
 
+    public static void addAcceptableFileMimeTypeParts(String... parts) {
+        if (parts != null) {
+            for (String part : parts) {
+                acceptableFileMimeTypesParts.add(part);
+            }
+        }
+    }
+
+    public static void removeAcceptableFileMimeTypeParts(String... parts) {
+        if (parts != null) {
+            for (String part : parts) {
+                acceptableFileMimeTypesParts.remove(part);
+            }
+        }
+    }
+
+    /**  */
     protected static boolean isFileMimeTypeValid(@Nullable String mimeType) {
         for (String part : acceptableFileMimeTypesParts) {
             if (mimeType != null && mimeType.contains(part)) {
@@ -221,10 +242,10 @@ public class PlaylistManager {
                 playTrack(mCurrentTrackIndex + 1);
             } else {
                 if (mLoopPlaylist) {
-                    logger.debug("loop is enabled, playing from start");
+                    logger.debug("loop is enabled, playing from start...");
                     playFirstTrack();
                 } else {
-                    logger.debug("loop is not enabled, resetting");
+                    logger.debug("loop is disabled, resetting...");
                     resetTrack();
                 }
             }
@@ -481,10 +502,10 @@ public class PlaylistManager {
         mTrackRemovedObservable.dispatchRemoved(removedPosition, trackUrl);
     }
 
-    private class MediaControllerCallbacks implements MediaPlayerController.OnStateChangedListener, MediaPlayerController.OnCompletionListener  {
+    private class MediaControllerCallbacks implements MediaPlayerController.OnStateChangedListener, MediaPlayerController.OnCompletionListener {
 
         @Override
-        public void onCurrentStateChanged(@NonNull MediaPlayerController.State currentState) {
+        public void onCurrentStateChanged(@NonNull MediaPlayerController.State currentState, @NonNull MediaPlayerController.State previousState) {
             if (!isTracksEmpty()) {
                 Uri currentTrackUri = getCurrentTrackUri();
                 String currentTrackUriString = currentTrackUri != null? currentTrackUri.toString() : null;

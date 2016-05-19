@@ -6,9 +6,15 @@ import org.apache.log4j.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import ru.maxsmr.mediaplayercontroller.PlaylistManager;
 import ru.maxsmr.mediaplayerexample.app.logger.ConfigureLog4J;
+import ru.maxsmr.mediaplayerexample.player.MediaPlayerFactory;
 
 public class MediaPlayerExampleApp extends Application {
+
+    static {
+        PlaylistManager.addAcceptableFileMimeTypeParts("application/ogg");
+    }
 
     private static final Logger logger = LoggerFactory.getLogger(MediaPlayerExampleApp.class);
 
@@ -26,6 +32,7 @@ public class MediaPlayerExampleApp extends Application {
         super.onCreate();
         logger.debug("onCreate()");
         applyLog4JConf();
+        MediaPlayerFactory.initInstance(this);
     }
 
 }

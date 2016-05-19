@@ -205,7 +205,7 @@ public final class MetadataRetriever {
             return metadata;
         }
 
-        metadata.duration = extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_DURATION, Integer.class);
+        metadata.durationMs = extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_DURATION, Integer.class);
         metadata.cdTrackNumber = extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER, String.class);
         metadata.album = extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_ALBUM, String.class);
         metadata.artist = extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_ARTIST, String.class);
@@ -282,6 +282,7 @@ public final class MetadataRetriever {
         }
     }
 
+    // TODO not working
     @Nullable
     public static Bitmap extractAlbumArt(@NonNull Context context, @Nullable Uri resourceUri) {
 
@@ -317,7 +318,7 @@ public final class MetadataRetriever {
 
     public static class MediaMetadata {
 
-        public long duration;
+        public long durationMs;
 
         public String cdTrackNumber;
 
@@ -370,7 +371,7 @@ public final class MetadataRetriever {
         @Override
         public String toString() {
             return "MediaMetadata{" +
-                    "duration=" + duration +
+                    "durationMs=" + durationMs +
                     ", cdTrackNumber=" + cdTrackNumber +
                     ", album='" + album + '\'' +
                     ", artist='" + artist + '\'' +

@@ -54,9 +54,11 @@ import java.util.List;
 
 import ru.maxsmr.commonutils.android.GuiUtils;
 import ru.maxsmr.commonutils.data.FileHelper;
-import ru.maxsmr.mediaplayercontroller.MediaPlayerController;
+import ru.maxsmr.commonutils.data.MetadataRetriever;
+import ru.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
 import ru.maxsmr.mediaplayercontroller.PlaylistManager;
-import ru.maxsmr.mediaplayercontroller.utils.MetadataRetriever;
+import ru.maxsmr.mediaplayercontroller.ScrobblerHelper;
+import ru.maxsmr.mediaplayerexample.player.MediaPlayerFactory;
 
 public class TestActivity extends AppCompatActivity implements SurfaceHolder.Callback, MediaPlayerController.OnStateChangedListener, MediaPlayerController.OnErrorListener, MediaPlayerController.OnVideoSizeChangedListener, PlaylistManager.OnTracksSetListener, AdapterView.OnItemSelectedListener {
 
@@ -64,6 +66,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
     private MediaPlayerController mediaPlayerController;
     private PlaylistManager playlistManager;
+    private ScrobblerHelper scrobblerHelper;
 
     private Spinner navigationSpinner;
 
@@ -100,7 +103,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     }
 
     private void initMediaController() {
-        mediaPlayerController = new MediaPlayerController(this);
+        mediaPlayerController = MediaPlayerFactory.getInstance().create("mpc_test");
         mediaPlayerController.getStateChangedObservable().registerObserver(this);
         mediaPlayerController.getErrorObservable().registerObserver(this);
         mediaPlayerController.getVideoSizeChangedObservable().registerObserver(this);
@@ -110,6 +113,10 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
         playlistManager = new PlaylistManager(mediaPlayerController);
         playlistManager.enableLoopPlaylist(true);
         playlistManager.getTracksSetObservable().registerObserver(this);
+    }
+
+    private void initScrobblerHelper() {
+        scrobblerHelper = ScrobblerHelper.attach(this, mediaPlayerController);
     }
 
     @SuppressWarnings("ConstantConditions")
@@ -191,8 +198,23 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
                 item.setChecked(!isActionPlaylistChecked(menu));
                 consumed = true;
                 break;
+            case R.id.actionLooping:
+                item.setChecked(!isActionLoopingChecked(menu));
+                mediaPlayerController.setLooping(isActionLoopingChecked(menu));
+                consumed = true;
+                break;
+            case R.id.actionEnableScrobbling:
+                item.setChecked(!isActionEnableScrobblingChecked(menu));
+                if (isActionLoopingChecked(menu)) {
+                    scrobblerHelper.enableScrobbling();
+                } else {
+                    scrobblerHelper.disableScrobbling();
+                }
+                consumed = true;
+                break;
             case R.id.actionQuit:
                 finish();
+                consumed = true;
                 break;
         }
 
@@ -218,6 +240,16 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
 //            cb.setChecked(checked);
 //    }
 
+    private boolean isActionLoopingChecked(Menu menu) {
+        MenuItem menuItem = menu.findItem(R.id.actionLooping);
+        return menuItem.isChecked();
+    }
+
+    private boolean isActionEnableScrobblingChecked(Menu menu) {
+        MenuItem menuItem = menu.findItem(R.id.actionEnableScrobbling);
+        return menuItem.isChecked();
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -229,6 +261,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
         initMediaViews();
         initSurfaceView();
         initPlaylistManager();
+        initScrobblerHelper();
 
         loadingLayout = (LinearLayout) findViewById(R.id.llLoading);
         errorView = (TextView) findViewById(R.id.emptyText);
@@ -266,6 +299,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
             surfaceView.getHolder().removeCallback(this);
         }
 
+        scrobblerHelper.detach();
         playlistManager.release();
 
         mediaPlayerController.getStateChangedObservable().unregisterObserver(this);
@@ -324,8 +358,8 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     }
 
     @Override
-    public void onCurrentStateChanged(@NonNull MediaPlayerController.State currentState) {
-        logger.info("onCurrentStateChanged(), currentState=" + currentState);
+    public void onCurrentStateChanged(@NonNull MediaPlayerController.State currentState, @NonNull MediaPlayerController.State previousState) {
+        logger.info("onCurrentStateChanged(), currentState=" + currentState + ", previousState=" + previousState);
         invalidateByCurrentState();
         if (currentState == MediaPlayerController.State.PLAYING) {
             Uri uri = mediaPlayerController.isAudioSpecified() ? mediaPlayerController.getAudioUri() : mediaPlayerController.getVideoUri();
@@ -404,7 +438,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
                                 filesList.add(f.getAbsolutePath());
                             }
                             playlistManager.setTracks(filesList);
-                            playlistManager.playTrack(0);
+                            playlistManager.playFirstTrack();
                             hideFileSelectDialog();
                         }
                     }
@@ -427,8 +461,13 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
                             mediaPlayerController.setVideoFile(file);
                         }
 
-                        mediaPlayerController.start();
-                        mediaPlayerController.resume();
+                        if (mediaPlayerController.isAudioSpecified() || mediaPlayerController.isVideoSpecified()) {
+                            mediaPlayerController.start();
+                            mediaPlayerController.resume();
+                        } else {
+                            Toast.makeText(TestActivity.this, String.format(getString(R.string.error_incorrect_media_file), file.toString()), Toast.LENGTH_SHORT).show();
+                        }
+
                         hideFileSelectDialog();
                     }
                 }

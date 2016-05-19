@@ -112,7 +112,7 @@ public class GraphicUtils {
         }
 
         final long duration = getVideoDuration(videoFile);
-        // logger.debug("video duration: " + duration + " ms");
+        // logger.debug("video durationMs: " + durationMs + " ms");
 
         if (duration == 0) {
             logger.error("duration of video file " + videoFile + " is 0");
@@ -125,7 +125,7 @@ public class GraphicUtils {
 
         ArrayList<Pair<Long, Bitmap>> videoFrames = new ArrayList<>(framesCount);
 
-        while (lastPosition <= duration) { // (duration - interval)
+        while (lastPosition <= duration) { // (durationMs - interval)
 
             // logger.debug("getting frame at position: " + lastPosition + " ms");
             final Pair<Long, Bitmap> frame = new Pair<>(lastPosition, getVideoFrameAtPosition(videoFile, lastPosition));

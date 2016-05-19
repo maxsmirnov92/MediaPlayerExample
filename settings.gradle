@@ -1,1 +1,1 @@
-include ':app', ':mediaplayercontroller', ':commonutils'
+include ':app', ':mediaplayercontroller', ':commonutils', ':tasksutils'

@@ -6,6 +6,7 @@
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
       <module fileurl="file://$PROJECT_DIR$/commonutils/commonutils.iml" filepath="$PROJECT_DIR$/commonutils/commonutils.iml" />
       <module fileurl="file://$PROJECT_DIR$/mediaplayercontroller/mediaplayercontroller.iml" filepath="$PROJECT_DIR$/mediaplayercontroller/mediaplayercontroller.iml" />
+      <module fileurl="file://$PROJECT_DIR$/tasksutils/tasksutils.iml" filepath="$PROJECT_DIR$/tasksutils/tasksutils.iml" />
     </modules>
   </component>
 </project>
