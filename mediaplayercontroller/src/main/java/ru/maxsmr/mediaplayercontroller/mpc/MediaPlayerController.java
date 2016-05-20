@@ -198,9 +198,8 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         @SuppressWarnings("ConstantConditions")
         @Override
         public void onPrepared(MediaPlayer mp) {
-            logger.debug("onPrepared()");
-
             synchronized (MediaPlayerController.this) {
+                logger.debug("onPrepared()");
 
                 if (Build.VERSION.SDK_INT > Build.VERSION_CODES.ICE_CREAM_SANDWICH_MR1) {
                     logger.info("track info: " + Arrays.toString(mMediaPlayer.getTrackInfo()));
@@ -304,9 +303,8 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     private final MediaPlayer.OnCompletionListener mCompletionListener =
             new MediaPlayer.OnCompletionListener() {
                 public void onCompletion(MediaPlayer mp) {
-                    logger.info("onCompletion()");
-
                     synchronized (MediaPlayerController.this) {
+                        logger.info("onCompletion()");
 
                         setCurrentState(State.IDLE);
                         setTargetState(State.IDLE);
