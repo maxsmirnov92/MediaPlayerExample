@@ -191,8 +191,11 @@ public class ScrobblerHelper {
     private class MediaPlayerCallbacks implements MediaPlayerController.OnStateChangedListener, MediaPlayerController.OnCompletionListener {
 
         @Override
-        public void onCompletion() {
-
+        public void onCompletion(boolean isLooping) {
+            if (isLooping) {
+                notifyScrobblerStateChanged(MediaPlayerController.State.IDLE, mLastState, null, 0);
+                notifyScrobblerStateChanged(MediaPlayerController.State.PLAYING, mLastState, mMpc.getCurrentTrackMetatada(), mMpc.getCurrentPosition());
+            }
         }
 
         @Override

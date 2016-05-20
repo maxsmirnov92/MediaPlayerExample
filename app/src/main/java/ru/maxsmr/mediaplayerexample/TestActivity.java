@@ -1,11 +1,10 @@
 package ru.maxsmr.mediaplayerexample;
 
 import android.app.Dialog;
-import android.content.ContentResolver;
 import android.content.Context;
 import android.content.DialogInterface;
-import android.graphics.Bitmap;
 import android.graphics.Point;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -28,7 +27,6 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.CheckedTextView;
 import android.widget.EditText;
@@ -36,6 +34,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.MediaController;
 import android.widget.ProgressBar;
+import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.SpinnerAdapter;
 import android.widget.TextView;
@@ -54,13 +53,12 @@ import java.util.List;
 
 import ru.maxsmr.commonutils.android.GuiUtils;
 import ru.maxsmr.commonutils.data.FileHelper;
-import ru.maxsmr.commonutils.data.MetadataRetriever;
-import ru.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
 import ru.maxsmr.mediaplayercontroller.PlaylistManager;
 import ru.maxsmr.mediaplayercontroller.ScrobblerHelper;
+import ru.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
 import ru.maxsmr.mediaplayerexample.player.MediaPlayerFactory;
 
-public class TestActivity extends AppCompatActivity implements SurfaceHolder.Callback, MediaPlayerController.OnStateChangedListener, MediaPlayerController.OnErrorListener, MediaPlayerController.OnVideoSizeChangedListener, PlaylistManager.OnTracksSetListener, AdapterView.OnItemSelectedListener {
+public class TestActivity extends AppCompatActivity implements SurfaceHolder.Callback, MediaPlayerController.OnStateChangedListener, MediaPlayerController.OnErrorListener, MediaPlayerController.OnVideoSizeChangedListener, MediaPlayerController.OnPlaybackTimeUpdateTimeListener, PlaylistManager.OnTracksSetListener, SeekBar.OnSeekBarChangeListener {
 
     private static final Logger logger = LoggerFactory.getLogger(TestActivity.class);
 
@@ -69,6 +67,8 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     private ScrobblerHelper scrobblerHelper;
 
     private Spinner navigationSpinner;
+
+    private SeekBar trackBar;
 
     private LinearLayout loadingLayout;
     private TextView errorView;
@@ -99,14 +99,23 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
         navigationSpinner = (Spinner) findViewById(R.id.action_bar_spinner);
         SpinnerAdapter spinnerAdapter = ArrayAdapter.createFromResource(getApplicationContext(), R.array.actionbar_navigation_items, android.R.layout.simple_list_item_1);
         navigationSpinner.setAdapter(spinnerAdapter);
-        navigationSpinner.setOnItemSelectedListener(this);
+//        navigationSpinner.setOnItemSelectedListener(this);
+    }
+
+    private void initTrackBar() {
+        trackBar = (SeekBar) findViewById(R.id.sbTrackbar);
+        trackBar.setOnSeekBarChangeListener(this);
+        trackBar.setVisibility(View.GONE);
     }
 
     private void initMediaController() {
+        setVolumeControlStream(AudioManager.STREAM_MUSIC);
         mediaPlayerController = MediaPlayerFactory.getInstance().create("mpc_test");
+        mediaPlayerController.setNotifyPlaybackTimeInterval(200);
         mediaPlayerController.getStateChangedObservable().registerObserver(this);
         mediaPlayerController.getErrorObservable().registerObserver(this);
         mediaPlayerController.getVideoSizeChangedObservable().registerObserver(this);
+        mediaPlayerController.getPlaybackTimeUpdateTimeObservable().registerObserver(this);
     }
 
     private void initPlaylistManager() {
@@ -257,6 +266,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
         setContentView(R.layout.activity_test);
         initToolbar();
         initSpinner();
+        initTrackBar();
         initMediaController();
         initMediaViews();
         initSurfaceView();
@@ -300,12 +310,15 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
         }
 
         scrobblerHelper.detach();
-        playlistManager.release();
 
         mediaPlayerController.getStateChangedObservable().unregisterObserver(this);
         mediaPlayerController.getErrorObservable().unregisterObserver(this);
+        mediaPlayerController.getVideoSizeChangedObservable().unregisterObserver(this);
+        mediaPlayerController.getPlaybackTimeUpdateTimeObservable().unregisterObserver(this);
         mediaPlayerController.release();
         mediaPlayerController = null;
+
+        playlistManager.release();
     }
 
     @Override
@@ -358,19 +371,32 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     }
 
     @Override
-    public void onCurrentStateChanged(@NonNull MediaPlayerController.State currentState, @NonNull MediaPlayerController.State previousState) {
+    public void onCurrentStateChanged(@NonNull final MediaPlayerController.State currentState, @NonNull MediaPlayerController.State previousState) {
         logger.info("onCurrentStateChanged(), currentState=" + currentState + ", previousState=" + previousState);
-        invalidateByCurrentState();
-        if (currentState == MediaPlayerController.State.PLAYING) {
-            Uri uri = mediaPlayerController.isAudioSpecified() ? mediaPlayerController.getAudioUri() : mediaPlayerController.getVideoUri();
-            if (uri != null) {
-                logger.debug("metadata: " + MetadataRetriever.extractMetaData(this, uri, null));
-                Bitmap albumArt = MetadataRetriever.extractAlbumArt(this, new Uri.Builder().scheme(ContentResolver.SCHEME_CONTENT).appendEncodedPath(uri.getPath()).build());
-                if (albumArt != null) {
-                    albumArt.recycle();
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                invalidateByCurrentState();
+                if (currentState == MediaPlayerController.State.PLAYING || currentState == MediaPlayerController.State.PREPARED || currentState == MediaPlayerController.State.PAUSED) {
+                    trackBar.setMax(mediaPlayerController.getDuration());
+                    trackBar.setVisibility(View.VISIBLE);
+                } else {
+                    trackBar.setMax(0);
+                    trackBar.setVisibility(View.GONE);
                 }
             }
-        }
+        });
+
+//        if (currentState == MediaPlayerController.State.PLAYING) {
+//            Uri uri = mediaPlayerController.isAudioSpecified() ? mediaPlayerController.getAudioUri() : mediaPlayerController.getVideoUri();
+//            if (uri != null) {
+//                logger.debug("metadata: " + MetadataRetriever.extractMetaData(this, uri, null));
+//                Bitmap albumArt = MetadataRetriever.extractAlbumArt(this, new Uri.Builder().scheme(ContentResolver.SCHEME_CONTENT).appendEncodedPath(uri.getPath()).build());
+//                if (albumArt != null) {
+//                    albumArt.recycle();
+//                }
+//            }
+//        }
     }
 
     @Override
@@ -428,10 +454,10 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
             fd.addDirectoryListener(new FileDialog.DirSelectedListener() {
                 @Override
                 public void directorySelected(File directory, String[] dirs, String[] files) {
-                    if (directory != null && FileHelper.isDirExists(directory.getAbsolutePath())) {
-                        lastSelectedDirectory = directory;
+                    if (isPlaylist) {
+                        if (directory != null && FileHelper.isDirExists(directory.getAbsolutePath())) {
+                            lastSelectedDirectory = directory;
 
-                        if (isPlaylist) {
                             List<File> folderFiles = FileHelper.getFiles(directory, false, null);
                             List<String> filesList = new ArrayList<>();
                             for (File f : folderFiles) {
@@ -551,7 +577,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
 //                            if (isVideo != (playlistManager.getPlayMode() == PlaylistManager.PlayMode.VIDEO)) {
 //                                playlistManager.clearTracks();
 //                            }
-                            playlistManager.setPlayMode(isVideo? PlaylistManager.PlayMode.VIDEO : PlaylistManager.PlayMode.AUDIO);
+                            playlistManager.setPlayMode(isVideo ? PlaylistManager.PlayMode.VIDEO : PlaylistManager.PlayMode.AUDIO);
                             playlistManager.addTrack(url);
                             playlistManager.playLastTrack();
                         }
@@ -567,15 +593,6 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
             urlInputDialog.hide();
         }
         urlInputDialog = null;
-    }
-
-    @Override
-    public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-//        mediaPlayerController.stop();
-    }
-
-    @Override
-    public void onNothingSelected(AdapterView<?> parent) {
     }
 
     @Override
@@ -614,6 +631,28 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     @Override
     public void onTracksNotSet(@NonNull List<String> incorrectTracks) {
         logger.debug("onTracksNotSet(), incorrectTracks=" + incorrectTracks);
+    }
+
+    @Override
+    public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+        if (fromUser) {
+            mediaPlayerController.seekTo(progress);
+        }
+    }
+
+    @Override
+    public void onStartTrackingTouch(SeekBar seekBar) {
+
+    }
+
+    @Override
+    public void onStopTrackingTouch(SeekBar seekBar) {
+
+    }
+
+    @Override
+    public void onPlaybackTimeUpdateTime(int position, int duration) {
+        trackBar.setProgress(position);
     }
 
     private class PreviousClickListener implements View.OnClickListener {

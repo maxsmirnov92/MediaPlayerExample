@@ -76,15 +76,14 @@ public class PlaylistManager {
     protected static boolean isTrackValid(@Nullable String uriString) {
         if (!TextUtils.isEmpty(uriString)) {
             Uri uri = Uri.parse(uriString);
-            boolean isFile = uri.getScheme() == null || uri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_FILE);
-            if (isFile && FileHelper.isFileCorrect(new File(uri.getPath()))) {
-                String mimeType = HttpsURLConnection.guessContentTypeFromName(uriString);
-                return isFileMimeTypeValid(mimeType);
+            boolean isFile = TextUtils.isEmpty(uri.getScheme()) || uri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_FILE);
+            if (isFile) {
+                return FileHelper.isFileCorrect(new File(uri.getPath())) && isFileMimeTypeValid(HttpsURLConnection.guessContentTypeFromName(uriString));
             } else
-                return uri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_CONTENT)
+                return uri.getScheme() != null && (uri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_CONTENT)
                         || uri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_ANDROID_RESOURCE)
                         || uri.getScheme().equalsIgnoreCase("http")
-                        || uri.getScheme().equalsIgnoreCase("https");
+                        || uri.getScheme().equalsIgnoreCase("https"));
         }
         return false;
     }
@@ -155,11 +154,11 @@ public class PlaylistManager {
             throw new IllegalStateException(PlaylistManager.class.getSimpleName() + " was already released");
         }
 
-        mReleased = true;
-
         clearTracks();
         mPlayerController.getStateChangedObservable().unregisterObserver(mMediaControllerCallbacks);
         mPlayerController.getCompletionObservable().unregisterObserver(mMediaControllerCallbacks);
+
+        mReleased = true;
     }
 
     @NonNull
@@ -525,8 +524,10 @@ public class PlaylistManager {
         }
 
         @Override
-        public void onCompletion() {
-            playNextTrack();
+        public void onCompletion(boolean isLooping) {
+            if (!isLooping) {
+                playNextTrack();
+            }
         }
     }
 

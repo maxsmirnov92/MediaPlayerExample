@@ -46,8 +46,9 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     private final static int EXECUTOR_CALL_TIMEOUT = 10;
     private final ExecutorService mExecutor = Executors.newSingleThreadExecutor();
 
-    private final static int UPDATE_PLAYBACK_TIME_INTERVAL = 1000;
-    private final ScheduledThreadPoolExecutorManager mUpdatePlaybackTimeTask = new ScheduledThreadPoolExecutorManager("UpdatePlaybackTimeTask");
+    public final static long DEFAULT_NOTIFY_PLAYBACK_TIME_INTERVAL = 1000;
+    private long notifyPlaybackTimeInterval = DEFAULT_NOTIFY_PLAYBACK_TIME_INTERVAL;
+    private final ScheduledThreadPoolExecutorManager mPlaybackTimeTask = new ScheduledThreadPoolExecutorManager("PlaybackTimeTask");
 
     @NonNull
     private final Context mContext;
@@ -104,6 +105,11 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     @NonNull
     private final HeadsetPlugBroadcastReceiver mHeadsetPlugBroadcastReceiver = new HeadsetPlugBroadcastReceiver();
 
+    private boolean mReleasing = false;
+
+    public boolean isReleasing() {
+        return mReleasing;
+    }
 
     public boolean isReleased() {
         return mCurrentState == State.RELEASED;
@@ -194,28 +200,30 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         public void onPrepared(MediaPlayer mp) {
             logger.debug("onPrepared()");
 
-            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.ICE_CREAM_SANDWICH_MR1) {
-                logger.info("track info: " + Arrays.toString(mMediaPlayer.getTrackInfo()));
-            }
+            synchronized (MediaPlayerController.this) {
 
-            if (mAudioUri == null && mVideoUri == null) {
-                throw new IllegalStateException("audio/video uri is null, wtf?");
-            }
+                if (Build.VERSION.SDK_INT > Build.VERSION_CODES.ICE_CREAM_SANDWICH_MR1) {
+                    logger.info("track info: " + Arrays.toString(mMediaPlayer.getTrackInfo()));
+                }
 
-            boolean isAudio = isAudioSpecified();
-            Uri resourceUri = isAudio ? mAudioUri : mVideoUri;
+                if (mAudioUri == null && mVideoUri == null) {
+                    throw new IllegalStateException("audio/video uri is null, wtf?");
+                }
 
-            setCurrentState(State.PREPARED);
+                boolean isAudio = isAudioSpecified();
+                Uri resourceUri = isAudio ? mAudioUri : mVideoUri;
 
-            if (TextUtils.isEmpty(resourceUri.getScheme()) || resourceUri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_FILE)) {
+                setCurrentState(State.PREPARED);
 
-                mCanPause = true;
-                mCanSeekBack = true;
-                mCanSeekForward = true;
+                if (TextUtils.isEmpty(resourceUri.getScheme()) || resourceUri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_FILE)) {
 
-            } else {
+                    mCanPause = true;
+                    mCanSeekBack = true;
+                    mCanSeekForward = true;
 
-                // Get the capabilities of the player for this stream
+                } else {
+
+                    // Get the capabilities of the player for this stream
 //            Metadata data = mp.getMetadata(MediaPlayer.METADATA_ALL,
 //                    MediaPlayer.BYPASS_METADATA_FILTER);
 //
@@ -230,54 +238,61 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 //                mCanPause = mCanSeekBack = mCanSeekForward = true;
 //            }
 
-            }
-
-            if (mMediaController != null) {
-                mMediaController.setEnabled(true);
-            }
-
-            mVideoWidth = mp.getVideoWidth();
-            mVideoHeight = mp.getVideoHeight();
-
-            final int seekToPosition = mSeekWhenPrepared;  // mSeekWhenPrepared may be changed after seekTo() call
-            if (seekToPosition != POSITION_NO) {
-                seekTo(seekToPosition);
-            }
-
-            if (isAudio || mVideoWidth != 0 && mVideoHeight != 0) {
-                if (!isAudio) {
-                    mVideoView.getHolder().setFixedSize(mVideoWidth, mVideoHeight);
-                    mVideoView.requestLayout();
                 }
-                if (isAudio || mSurfaceWidth == mVideoWidth && mSurfaceHeight == mVideoHeight) {
-                    // We didn't actually change the size (it was already at the size
-                    // we need), so we won't get a "surface changed" callback, so
-                    // start the video here instead of in the callback.
-                    if (mTargetState == State.PLAYING) {
-                        start();
-                        if (mMediaController != null) {
-                            mMediaController.show();
-                        }
-                    } else if (!isPlaying() && (seekToPosition >= POSITION_START || getCurrentPosition() > POSITION_START)) {
-                        if (mMediaController != null) {
-                            // Show the media controls when we're paused into a video and make 'em stick.
-                            mMediaController.show(0);
+
+                if (mMediaController != null) {
+                    mMediaController.setEnabled(true);
+                }
+
+                mVideoWidth = mp.getVideoWidth();
+                mVideoHeight = mp.getVideoHeight();
+
+                final int seekToPosition = mSeekWhenPrepared;  // mSeekWhenPrepared may be changed after seekTo() call
+                if (seekToPosition != POSITION_NO) {
+                    seekTo(seekToPosition);
+                }
+
+                if (isAudio || mVideoWidth != 0 && mVideoHeight != 0) {
+                    if (!isAudio) {
+                        mVideoView.getHolder().setFixedSize(mVideoWidth, mVideoHeight);
+                        mVideoView.requestLayout();
+                    }
+                    if (isAudio || mSurfaceWidth == mVideoWidth && mSurfaceHeight == mVideoHeight) {
+                        // We didn't actually change the size (it was already at the size
+                        // we need), so we won't get a "surface changed" callback, so
+                        // start the video here instead of in the callback.
+                        if (mTargetState == State.PLAYING) {
+                            start();
+                            if (mMediaController != null) {
+                                mMediaController.show();
+                            }
+                        } else if (!isPlaying() && (seekToPosition >= POSITION_START || getCurrentPosition() > POSITION_START)) {
+                            if (mMediaController != null) {
+                                // Show the media controls when we're paused into a video and make 'em stick.
+                                mMediaController.show(0);
+                            }
                         }
                     }
+                } else {
+                    // We don't know the video size yet, but should start anyway.
+                    // The video size might be reported to us later.
+                    if (mTargetState == State.PLAYING) {
+                        start();
+                    }
                 }
-            } else {
-                // We don't know the video size yet, but should start anyway.
-                // The video size might be reported to us later.
-                if (mTargetState == State.PLAYING) {
-                    start();
-                }
-            }
 
-            if (CompareUtils.compareFloats(mVolumeLeftWhenPrepared, 0.0f, true) != 0 && CompareUtils.compareFloats(mVolumeLeftWhenPrepared, 0.0f, true) != 0) {
-                setVolume(mVolumeLeftWhenPrepared, mVolumeRightWhenPrepared);
+                if (CompareUtils.compareFloats(mVolumeLeftWhenPrepared, 0.0f, true) != 0 && CompareUtils.compareFloats(mVolumeLeftWhenPrepared, 0.0f, true) != 0) {
+                    setVolume(mVolumeLeftWhenPrepared, mVolumeRightWhenPrepared);
+                }
             }
         }
     };
+
+    private final PlaybackTimeUpdateTimeObservable playbackTimeUpdateTimeObservable = new PlaybackTimeUpdateTimeObservable();
+
+    public Observable<OnPlaybackTimeUpdateTimeListener> getPlaybackTimeUpdateTimeObservable() {
+        return playbackTimeUpdateTimeObservable;
+    }
 
     private final OnCompletionObservable completionObservable = new OnCompletionObservable();
 
@@ -291,13 +306,16 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                 public void onCompletion(MediaPlayer mp) {
                     logger.info("onCompletion()");
 
-                    setCurrentState(State.IDLE);
-                    setTargetState(State.IDLE);
+                    synchronized (MediaPlayerController.this) {
 
-                    completionObservable.dispatchCompleted();
+                        setCurrentState(State.IDLE);
+                        setTargetState(State.IDLE);
 
-                    if (mMediaController != null) {
-                        mMediaController.hide();
+                        completionObservable.dispatchCompleted();
+
+                        if (mMediaController != null) {
+                            mMediaController.hide();
+                        }
                     }
                 }
             };
@@ -375,7 +393,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     }
 
     public boolean isInPlaybackState() {
-        return (mMediaPlayer != null &&
+        return (mMediaPlayer != null && !isReleasing() &&
                 mCurrentState != State.RELEASED &&
                 mCurrentState != State.IDLE &&
                 mCurrentState != State.PREPARING);
@@ -386,7 +404,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     }
 
     public boolean isLooping() {
-        return isInPlaybackState() && mMediaPlayer != null && mMediaPlayer.isLooping();
+        return isInPlaybackState() && mMediaPlayer.isLooping();
     }
 
     public void setLooping(boolean toggle) {
@@ -410,6 +428,10 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         }
         mVolumeLeftWhenPrepared = left;
         mVolumeRightWhenPrepared = right;
+    }
+
+    public Uri getContentUri() {
+        return isAudioSpecified()? getAudioUri() : getVideoUri();
     }
 
     public boolean isAudioSpecified() {
@@ -549,6 +571,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
     @Override
     public void seekTo(int msec) {
+        logger.debug("seekTo(), msec=" + msec);
         try {
             seekToInternal(msec);
         } catch (IllegalArgumentException e) {
@@ -557,17 +580,18 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         }
     }
 
-    private void seekToInternal(int msec) {
+    private synchronized void seekToInternal(int msec) {
         if (isReleased()) {
             throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was released");
         }
-
         if (msec < POSITION_START && msec != POSITION_NO)
             throw new IllegalArgumentException("incorrect seek position: " + msec);
 
         if (isInPlaybackState()) {
             if (msec >= POSITION_START && msec <= mMediaPlayer.getDuration()) {
                 mMediaPlayer.seekTo(msec);
+            } else if (msec != POSITION_NO) {
+                throw new IllegalArgumentException("incorrect seek position: " + msec);
             }
             mSeekWhenPrepared = POSITION_NO;
         } else {
@@ -780,6 +804,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                 }
             }
             if (result) {
+                startPlaybackTimeTask();
                 setTargetState(State.PLAYING);
             } else {
                 releasePlayer(true);
@@ -788,7 +813,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     }
 
     @Override
-    public void pause() {
+    public synchronized void pause() {
         logger.debug("pause()");
 
         if (isReleased()) {
@@ -816,6 +841,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                         logger.error("an Exception occurred during get()", e);
                         mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
                     }
+                    stopPlaybackTimeTask();
                 }
             }
             if (result) {
@@ -826,7 +852,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         }
     }
 
-    public void stop() {
+    public synchronized void stop() {
         logger.debug("stop()");
 
         if (isReleased()) {
@@ -866,19 +892,78 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         releasePlayer(false);
     }
 
-    private boolean isUpdateTimeTaskRunning() {
-        return mUpdatePlaybackTimeTask.isRunning();
+    public void setNotifyPlaybackTimeInterval(long intervalMs) {
+        if (intervalMs <= 0) {
+            throw new IllegalArgumentException("incorrect intervalMs: " + intervalMs);
+        }
+        if (intervalMs != notifyPlaybackTimeInterval) {
+            notifyPlaybackTimeInterval = intervalMs;
+            if (mPlaybackTimeTask.getIntervalMs() != intervalMs && isPlaying()) {
+                startPlaybackTimeTask();
+            }
+        }
     }
 
-    private void startUpdateTimeTask() {
-//        mUpdatePlaybackTimeTask.addRunnableTask();
-        mUpdatePlaybackTimeTask.start(UPDATE_PLAYBACK_TIME_INTERVAL);
+    private boolean isPlaybackTimeTaskRunning() {
+        return mPlaybackTimeTask.isRunning();
+    }
+
+    private void restartPlaybackTimeTask() {
+
+        stopPlaybackTimeTask();
+
+        mPlaybackTimeTask.addRunnableTask(new Runnable() {
+
+            private Uri lastUri;
+            private long lastPositionMs = 0;
+
+            @Override
+            public void run() {
+                doUpdate();
+            }
+
+            private void doUpdate() {
+                if (isPlaying()) {
+
+                    final long currentDuration = getDuration();
+                    final long currentPosition = getCurrentPosition();
+                    final Uri currentUri = getContentUri();
+
+                    if (!currentUri.equals(lastUri)) {
+                        lastUri = currentUri;
+                        lastPositionMs = 0;
+                    }
+
+                    if (currentPosition < lastPositionMs || currentPosition >= currentDuration) {
+                        completionObservable.dispatchCompleted();
+                    }
+
+                    lastPositionMs = currentPosition;
+
+                    playbackTimeUpdateTimeObservable.dispatchPlaybackTimeUpdated();
+                }
+            }
+        });
+        mPlaybackTimeTask.start(notifyPlaybackTimeInterval);
+    }
+
+    private void startPlaybackTimeTask() {
+        if (!isPlaybackTimeTaskRunning()) {
+            restartPlaybackTimeTask();
+        }
+    }
+
+    private void stopPlaybackTimeTask() {
+        if (isPlaybackTimeTaskRunning()) {
+            mPlaybackTimeTask.stop(false, 0);
+            mPlaybackTimeTask.removeAllRunnableTasks();
+        }
     }
 
     /*
      * release the media player in any state
      */
-    private void releasePlayer(boolean clearTargetState) {
+    private synchronized void releasePlayer(boolean clearTargetState) {
         logger.debug("releasePlayer(), clearTargetState=" + clearTargetState);
 
         if (isReleased()) {
@@ -886,6 +971,8 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         }
 
         if (mMediaPlayer != null) {
+
+            mReleasing = true;
 
             try {
                 mExecutor.submit(new Callable<Void>() {
@@ -904,6 +991,8 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                 mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
             }
 
+            stopPlaybackTimeTask();
+
             mMediaPlayer = null;
 
             mCurrentBufferPercentage = 0;
@@ -919,10 +1008,12 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
             AudioManager am = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
             am.abandonAudioFocus(null);
+
+            mReleasing = false;
         }
     }
 
-    public void release() {
+    public synchronized void release() {
         logger.debug("release()");
 
         if (isReleased()) {
@@ -970,16 +1061,19 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     }
 
     public interface OnCompletionListener {
-        void onCompletion();
+
+        /** @param isLooping if track looping mode set */
+        void onCompletion(boolean isLooping);
     }
 
     private class OnCompletionObservable extends Observable<OnCompletionListener> {
 
         private void dispatchCompleted() {
             for (OnCompletionListener l : mObservers) {
-                l.onCompletion();
+                l.onCompletion(isLooping());
             }
         }
+
     }
 
     public interface OnErrorListener {
@@ -987,7 +1081,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         void onError(int what, int extra);
     }
 
-    private class OnErrorObservable extends android.database.Observable<OnErrorListener> {
+    private static class OnErrorObservable extends android.database.Observable<OnErrorListener> {
 
         private void dispatchError(int what, int extra) {
             for (OnErrorListener l : mObservers) {
@@ -1001,7 +1095,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         void onVideoSizeChanged(int width, int height);
     }
 
-    private class OnVideoSizeChangedObservable extends Observable<OnVideoSizeChangedListener> {
+    private static class OnVideoSizeChangedObservable extends Observable<OnVideoSizeChangedListener> {
 
         private void dispatchOnVideoSizeChanged(int width, int height) {
             for (OnVideoSizeChangedListener l : mObservers) {
@@ -1011,8 +1105,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     }
 
     private final SurfaceHolder.Callback mSHCallback = new SurfaceHolder.Callback() {
-        public void surfaceChanged(SurfaceHolder holder, int format,
-                                   int w, int h) {
+        public void surfaceChanged(SurfaceHolder holder, int format, int w, int h) {
             logger.debug("surfaceChanged(), format=" + format + ", w=" + w + ", h=" + h);
 
             mSurfaceWidth = w;
@@ -1052,16 +1145,17 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         }
     };
 
-    private class UpdatePlaybackTimeRunnable implements Runnable {
+    public interface OnPlaybackTimeUpdateTimeListener {
 
-
-
-        @Override
-        public void run() {
-
-        }
+        void onPlaybackTimeUpdateTime(int position, int duration);
     }
 
+    private class PlaybackTimeUpdateTimeObservable extends Observable<OnPlaybackTimeUpdateTimeListener> {
 
-
+        private void dispatchPlaybackTimeUpdated() {
+            for (OnPlaybackTimeUpdateTimeListener l : mObservers) {
+                l.onPlaybackTimeUpdateTime(getCurrentPosition(), getDuration());
+            }
+        }
+    }
 }
