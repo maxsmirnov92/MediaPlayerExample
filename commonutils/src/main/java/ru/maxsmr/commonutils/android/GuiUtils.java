@@ -5,9 +5,11 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.res.ColorStateList;
+import android.content.res.Configuration;
 import android.graphics.Point;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.StateListDrawable;
 import android.os.Build;
 import android.support.annotation.ColorInt;
 import android.support.annotation.NonNull;
@@ -21,7 +23,6 @@ import android.util.DisplayMetrics;
 import android.util.Pair;
 import android.view.Display;
 import android.view.KeyEvent;
-import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
@@ -33,6 +34,7 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -365,84 +367,8 @@ public class GuiUtils {
                 .setOnCancelListener(cancelListener).setCancelable(cancelable).show();
     }
 
-    @SuppressWarnings("SuspiciousNameCombination")
     @NonNull
-    public static Point getSurfaceViewSizeByDisplaySize(@NonNull Context context, float previewProportion) {
-
-        if (previewProportion <= 0) {
-            throw new IllegalArgumentException("incorrect previewProportion: " + previewProportion);
-        }
-
-        Display display = ((WindowManager) (context.getSystemService(Context.WINDOW_SERVICE))).getDefaultDisplay();
-
-        Point screenSize = new Point();
-        DisplayMetrics metrics = new DisplayMetrics();
-        display.getMetrics(metrics);
-        screenSize.set(metrics.widthPixels, metrics.heightPixels);
-
-        int newWidth;
-        int newHeight;
-
-        int rotation = display.getRotation();
-        if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
-            newWidth = Math.round((float) screenSize.x / previewProportion);
-            newHeight = screenSize.x;
-        } else {
-            newWidth = Math.round(previewProportion * (float) screenSize.y);
-            newHeight = Math.round((float) screenSize.x / previewProportion);
-        }
-
-        return new Point(newWidth, newHeight);
-    }
-
-    public enum FitSize {
-        FIT_WIDTH, FIT_HEIGHT;
-    }
-
-    @NonNull
-    public static Point getSurfaceViewSizeByPreviewSize(@NonNull Point previewSize, int limitSize, @NonNull FitSize fitSize) {
-
-//        if (viewSize.x <= 0 || viewSize.y <= 0) {
-//            throw new IllegalArgumentException("incorrect view size: " + viewSize.x + "x" + viewSize.y);
-//        }
-
-        if (previewSize.x <= 0 || previewSize.y <= 0) {
-            throw new IllegalArgumentException("incorrect preview size: " + previewSize.x + "x" + previewSize.y);
-        }
-
-        if (limitSize <= 0) {
-            throw new IllegalArgumentException("incorrect limit size: " + limitSize);
-        }
-
-        float previewProportion;
-
-        int newWidth;
-        int newHeight;
-
-        switch (fitSize) {
-            case FIT_WIDTH:
-                previewProportion = (float) previewSize.x / (float) previewSize.y;
-                newWidth = limitSize;
-                newHeight = Math.round((float) newWidth / previewProportion);
-                break;
-
-            case FIT_HEIGHT:
-                previewProportion = (float) previewSize.y / (float) previewSize.x;
-                newHeight = limitSize;
-                newWidth = Math.round((float) newHeight * previewProportion);
-                break;
-
-            default:
-                newWidth = 0;
-                newHeight = 0;
-                break;
-        }
-
-        return new Point(newWidth, newHeight);
-    }
-
-    @NonNull
-    public static Point getSurfaceViewSizeByPreviewSize(@NonNull Point viewSize, @NonNull Point previewSize) {
+    public static Point getCorrectedSurfaceViewSizeByPreviewSize(@NonNull Point viewSize, @NonNull Point previewSize) {
 
         if (viewSize.x <= 0 || viewSize.y <= 0) {
             throw new IllegalArgumentException("incorrect view size: " + viewSize.x + "x" + viewSize.y);
@@ -470,16 +396,109 @@ public class GuiUtils {
         return new Point((int) newCamWidth, (int) newCamHeight);
     }
 
-    public static void setViewSize(@NonNull View view, @NonNull Point size) {
+    @NonNull
+    public static Point getCorrectedSurfaceViewSizeByDisplaySize(@NonNull Context context, float previewProportion) {
 
-        if (size.x < ViewGroup.LayoutParams.WRAP_CONTENT || size.y < ViewGroup.LayoutParams.WRAP_CONTENT) {
-            throw new IllegalArgumentException("incorrect view size: " + size.x + "x" + size.y);
+        if (previewProportion <= 0) {
+            throw new IllegalArgumentException("incorrect previewProportion: " + previewProportion);
         }
 
+        Display display = ((WindowManager) (context.getSystemService(Context.WINDOW_SERVICE))).getDefaultDisplay();
+        DisplayMetrics metrics = new DisplayMetrics();
+        display.getMetrics(metrics);
+        return getCorrectedSurfaceViewSizeByPreviewProportion(previewProportion, metrics.heightPixels, FitSize.FIT_HEIGHT);
+    }
+
+    @NonNull
+    public static Point getCorrectedSurfaceViewSizeByPreviewSize(@NonNull Context context, @NonNull Point previewSize, @NonNull Point viewSize) {
+
+        if (previewSize.x <= 0 || previewSize.y <= 0) {
+            throw new IllegalArgumentException("incorrect preview size: " + previewSize.x + "x" + previewSize.y);
+        }
+
+        float previewProportion;
+        final GuiUtils.FitSize fitSize = GuiUtils.FitSize.FIT_HEIGHT;
+        final int limitSize = viewSize.y;
+
+        switch (context.getResources().getConfiguration().orientation) {
+            case Configuration.ORIENTATION_PORTRAIT:
+                previewProportion = (float) previewSize.y / (float) previewSize.x;
+                break;
+
+            case Configuration.ORIENTATION_LANDSCAPE:
+                previewProportion = (float) previewSize.x / (float) previewSize.y;
+                break;
+
+            default:
+                throw new UnsupportedOperationException("unknown orientation: " + context.getResources().getConfiguration().orientation);
+        }
+
+        return getCorrectedSurfaceViewSizeByPreviewProportion(previewProportion, limitSize, fitSize);
+    }
+
+    @NonNull
+    public static Point getCorrectedSurfaceViewSizeByPreviewProportion(float previewProportion, int limitSize, @NonNull FitSize fitSize) {
+
+        if (limitSize <= 0) {
+            throw new IllegalArgumentException("incorrect limit size: " + limitSize);
+        }
+
+        if (previewProportion == 0) {
+            throw new IllegalArgumentException("incorrect preview proportion: " + previewProportion);
+        }
+
+        int newWidth;
+        int newHeight;
+
+        switch (fitSize) {
+            case FIT_WIDTH:
+                newWidth = limitSize;
+                newHeight = Math.round((float) newWidth / previewProportion);
+                break;
+
+            case FIT_HEIGHT:
+                newHeight = limitSize;
+                newWidth = Math.round((float) newHeight * previewProportion);
+                break;
+
+            default:
+                newWidth = 0;
+                newHeight = 0;
+                break;
+        }
+
+        return new Point(newWidth, newHeight);
+    }
+
+    public enum FitSize {
+        FIT_WIDTH, FIT_HEIGHT;
+    }
+
+
+    public static void setViewSize(@NonNull View view, @NonNull Point size) {
+        if (size.x < -1 || size.y < -1) {
+            throw new IllegalArgumentException("incorrect view size: " + size.x + "x" + size.y);
+        }
         ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
         layoutParams.width = size.x;
         layoutParams.height = size.y;
         view.setLayoutParams(layoutParams);
+    }
+
+    @SuppressWarnings("PrimitiveArrayArgumentToVariableArgMethod")
+    @Nullable
+    public static Drawable getDrawableForState(@NonNull StateListDrawable stateListDrawable, int... state) {
+        try {
+            Method getStateDrawableIndex = StateListDrawable.class.getMethod("getStateDrawableIndex", int[].class);
+            Method getStateDrawable = StateListDrawable.class.getMethod("getStateDrawable", int.class);
+            getStateDrawableIndex.setAccessible(true);
+            getStateDrawable.setAccessible(true);
+            int index = (int) getStateDrawableIndex.invoke(stateListDrawable, state);
+            return (Drawable) getStateDrawable.invoke(stateListDrawable, index);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
 }

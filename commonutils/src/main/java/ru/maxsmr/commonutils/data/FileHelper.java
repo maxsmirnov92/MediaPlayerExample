@@ -1297,18 +1297,7 @@ public class FileHelper {
 
         final String destFilePath = destFile.getAbsolutePath();
 
-        final FileOutputStream out = new FileOutputStream(destFile);
-        final InputStream is = ctx.getResources().openRawResource(resId);
-
-        byte buf[] = new byte[1024];
-        int len;
-
-        while ((len = is.read(buf)) > 0) {
-            out.write(buf, 0, len);
-        }
-
-        out.close();
-        is.close();
+        revectorStream(ctx.getResources().openRawResource(resId), new FileOutputStream(destFile));
 
         return (Runtime.getRuntime().exec("chmod " + mode + " " + destFilePath).waitFor() == 0);
     }
