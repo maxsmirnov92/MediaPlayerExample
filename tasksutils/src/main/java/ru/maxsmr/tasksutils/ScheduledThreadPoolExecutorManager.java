@@ -1,4 +1,4 @@
-package ru.altarix.tasksutils;
+package ru.maxsmr.tasksutils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

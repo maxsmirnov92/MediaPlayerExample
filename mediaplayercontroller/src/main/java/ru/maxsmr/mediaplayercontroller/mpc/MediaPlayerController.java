@@ -2,6 +2,7 @@ package ru.maxsmr.mediaplayercontroller.mpc;
 
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.res.AssetFileDescriptor;
 import android.database.Observable;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
@@ -9,6 +10,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.annotation.RawRes;
 import android.text.TextUtils;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -28,11 +30,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import ru.altarix.tasksutils.ScheduledThreadPoolExecutorManager;
 import ru.maxsmr.commonutils.data.CompareUtils;
 import ru.maxsmr.commonutils.data.FileHelper;
 import ru.maxsmr.commonutils.data.MetadataRetriever;
 import ru.maxsmr.mediaplayercontroller.HeadsetPlugBroadcastReceiver;
+import ru.maxsmr.tasksutils.ScheduledThreadPoolExecutorManager;
 
 public final class MediaPlayerController implements MediaController.MediaPlayerControl {
 
@@ -43,7 +45,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         init();
     }
 
-    private final static int EXECUTOR_CALL_TIMEOUT = 10;
+    private final static int EXECUTOR_CALL_TIMEOUT = 60;
     private final ExecutorService mExecutor = Executors.newSingleThreadExecutor();
 
     public final static long DEFAULT_NOTIFY_PLAYBACK_TIME_INTERVAL = 1000;
@@ -67,7 +69,13 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     private Uri mAudioUri;
 
     @Nullable
+    private AssetFileDescriptor mAudioFileDescriptor;
+
+    @Nullable
     private Uri mVideoUri;
+
+    @Nullable
+    private AssetFileDescriptor mVideoFileDescriptor;
 
     @NonNull
     private Map<String, String> mHeaders = new LinkedHashMap<>();
@@ -89,8 +97,12 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
     private boolean mLoopWhenPreparing = false; // set looping property while preparing
 
-    private float mVolumeLeftWhenPrepared = 0.0f;
-    private float mVolumeRightWhenPrepared = 0.0f;
+    private float mVolumeLeftWhenPrepared = VOLUME_NOT_SET;
+    private float mVolumeRightWhenPrepared = VOLUME_NOT_SET;
+
+    public static final float VOLUME_MAX = 1.0f;
+    public static final float VOLUME_MIN = 0.0f;
+    public static final int VOLUME_NOT_SET = -1;
 
     public static final int AUDIO_SESSION_EMPTY = -1;
 
@@ -167,8 +179,8 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                 public void onVideoSizeChanged(MediaPlayer mp, int width, int height) {
                     logger.debug("onVideoSizeChanged(), width=" + width + ", height=" + height);
                     if (mVideoView != null) {
-                        mVideoWidth = mp != null? mp.getVideoWidth() : width;
-                        mVideoHeight =mp != null? mp.getVideoHeight() : height;
+                        mVideoWidth = mp != null ? mp.getVideoWidth() : width;
+                        mVideoHeight = mp != null ? mp.getVideoHeight() : height;
                         if (mVideoWidth != width || mVideoHeight != height) {
                             throw new IllegalStateException("media player width/height does not match");
                         }
@@ -205,8 +217,8 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                     logger.info("track info: " + Arrays.toString(mMediaPlayer.getTrackInfo()));
                 }
 
-                if (mAudioUri == null && mVideoUri == null) {
-                    throw new IllegalStateException("audio/video uri is null, wtf?");
+                if (!isAudioSpecified() && !isVideoSpecified()) {
+                    throw new IllegalStateException("audio/video uri or file descriptor is null, wtf?");
                 }
 
                 boolean isAudio = isAudioSpecified();
@@ -214,7 +226,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
                 setCurrentState(State.PREPARED);
 
-                if (TextUtils.isEmpty(resourceUri.getScheme()) || resourceUri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_FILE)) {
+                if (resourceUri == null || TextUtils.isEmpty(resourceUri.getScheme()) || resourceUri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_FILE)) {
 
                     mCanPause = true;
                     mCanSeekBack = true;
@@ -280,7 +292,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                     }
                 }
 
-                if (CompareUtils.compareFloats(mVolumeLeftWhenPrepared, 0.0f, true) != 0 && CompareUtils.compareFloats(mVolumeLeftWhenPrepared, 0.0f, true) != 0) {
+                if (CompareUtils.compareFloats(mVolumeLeftWhenPrepared, (float) VOLUME_NOT_SET, true) != 0 && CompareUtils.compareFloats(mVolumeLeftWhenPrepared, (float) VOLUME_NOT_SET, true) != 0) {
                     setVolume(mVolumeLeftWhenPrepared, mVolumeRightWhenPrepared);
                 }
             }
@@ -401,6 +413,10 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         return isInPlaybackState() && mMediaPlayer.isPlaying();
     }
 
+    public boolean isPreparing() {
+        return mCurrentState == State.PREPARING;
+    }
+
     public boolean isLooping() {
         return isInPlaybackState() && mMediaPlayer.isLooping();
     }
@@ -413,11 +429,11 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     }
 
     public void setVolume(float left, float right) {
-        if (left < 0.0f || left > 1.0f) {
+        if (left < VOLUME_MIN || left > VOLUME_MAX) {
             throw new IllegalArgumentException("incorrect left volume: " + left);
         }
 
-        if (right < 0.0f || right > 1.0f) {
+        if (right < VOLUME_MIN || right > VOLUME_MAX) {
             throw new IllegalArgumentException("incorrect right volume: " + left);
         }
 
@@ -428,17 +444,28 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         mVolumeRightWhenPrepared = right;
     }
 
+    @Nullable
     public Uri getContentUri() {
-        return isAudioSpecified()? getAudioUri() : getVideoUri();
+        return isAudioSpecified() ? getAudioUri() : getVideoUri();
+    }
+
+    @Nullable
+    public AssetFileDescriptor getContentAssetFileDescriptor() {
+        return isAudioSpecified()? getAudioFileDescriptor() : getVideoFileDescriptor();
     }
 
     public boolean isAudioSpecified() {
-        return mAudioUri != null;
+        return mAudioUri != null || mAudioFileDescriptor != null;
     }
 
     @Nullable
     public Uri getAudioUri() {
         return mAudioUri;
+    }
+
+    @Nullable
+    public AssetFileDescriptor getAudioFileDescriptor() {
+        return mAudioFileDescriptor;
     }
 
     public void setAudioFile(@Nullable File file) {
@@ -472,13 +499,58 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
         if ((audioUri != null ? !audioUri.equals(this.mAudioUri) : this.mAudioUri != null) || (headers == null || !headers.equals(this.mHeaders))) {
 
+            this.mVideoFileDescriptor = null;
             this.mVideoUri = null;
+            this.mAudioFileDescriptor = null;
             this.mAudioUri = audioUri;
             this.mHeaders = headers != null ? new LinkedHashMap<>(headers) : new LinkedHashMap<String, String>();
 
             if (mCurrentState != State.IDLE) {
                 if (isAudioSpecified()) {
-                    openUri();
+                    openDataSource();
+                } else {
+                    stop();
+                }
+            }
+        }
+    }
+
+    public void setAudioRawId(@RawRes int audioRawResId) {
+        if (audioRawResId > 0) {
+            setAudioFd(mContext.getResources().openRawResourceFd(audioRawResId));
+        }
+    }
+
+    public void setAudioAsset(String assetName) {
+        AssetFileDescriptor fd = null;
+        try {
+            fd = mContext.getAssets().openNonAssetFd(assetName);
+        } catch (IOException e) {
+            e.printStackTrace();
+            logger.error("can't open asset: " + assetName);
+        }
+        if (fd != null) {
+            setAudioFd(fd);
+        }
+    }
+
+    public synchronized void setAudioFd(@Nullable AssetFileDescriptor audioFd) {
+
+        if (isReleased()) {
+            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was released");
+        }
+
+        if (audioFd != null ? !audioFd.equals(this.mAudioFileDescriptor) : this.mAudioFileDescriptor != null) {
+
+            this.mVideoFileDescriptor = null;
+            this.mVideoUri = null;
+            this.mAudioFileDescriptor = audioFd;
+            this.mAudioUri = null;
+            this.mHeaders = new LinkedHashMap<>();
+
+            if (mCurrentState != State.IDLE) {
+                if (isAudioSpecified()) {
+                    openDataSource();
                 } else {
                     stop();
                 }
@@ -487,12 +559,17 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     }
 
     public boolean isVideoSpecified() {
-        return mVideoUri != null;
+        return mVideoUri != null || mVideoFileDescriptor != null;
     }
 
     @Nullable
     public Uri getVideoUri() {
         return mVideoUri;
+    }
+
+    @Nullable
+    public AssetFileDescriptor getVideoFileDescriptor() {
+        return mVideoFileDescriptor;
     }
 
     public void setVideoFile(@Nullable File file) {
@@ -526,13 +603,57 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
         if ((videoUri != null ? !videoUri.equals(this.mVideoUri) : this.mVideoUri != null) || (headers == null || !headers.equals(this.mHeaders))) {
 
+            this.mAudioFileDescriptor = null;
             this.mAudioUri = null;
+            this.mVideoFileDescriptor = null;
             this.mVideoUri = videoUri;
             this.mHeaders = headers != null ? new LinkedHashMap<>(headers) : new LinkedHashMap<String, String>();
 
             if (mCurrentState != State.IDLE) {
                 if (isVideoSpecified()) {
-                    openUri();
+                    openDataSource();
+                } else {
+                    stop();
+                }
+            }
+        }
+    }
+
+    public void setVideoRawId(@RawRes int videoRawResId) {
+        if (videoRawResId > 0) {
+            setVideoFd(mContext.getResources().openRawResourceFd(videoRawResId));
+        }
+    }
+
+    public void setVideoAsset(String assetName) {
+        AssetFileDescriptor fd = null;
+        try {
+            fd = mContext.getAssets().openNonAssetFd(assetName);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        if (fd != null) {
+            setVideoFd(fd);
+        }
+    }
+
+    public synchronized void setVideoFd(@Nullable AssetFileDescriptor videoFd) {
+
+        if (isReleased()) {
+            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was released");
+        }
+
+        if (videoFd != null ? !videoFd.equals(this.mVideoFileDescriptor) : this.mVideoFileDescriptor != null) {
+
+            this.mAudioFileDescriptor = null;
+            this.mAudioUri = null;
+            this.mVideoFileDescriptor = videoFd;
+            this.mVideoUri = null;
+            this.mHeaders = new LinkedHashMap<>();
+
+            if (mCurrentState != State.IDLE) {
+                if (isVideoSpecified()) {
+                    openDataSource();
                 } else {
                     stop();
                 }
@@ -670,18 +791,21 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         }
     }
 
-    private synchronized void openUri() {
-        logger.debug("openUri()");
+    /**
+     * events callbacks depends on thread, on which called this method
+     */
+    private synchronized void openDataSource() {
+        logger.debug("openDataSource()");
 
         if (isReleased()) {
             throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was released");
         }
 
-        if (mAudioUri == null && mVideoUri == null) {
-            throw new IllegalStateException("audio/video uri is not specified");
+        if (!isAudioSpecified() && !isVideoSpecified()) {
+            throw new IllegalStateException("audio/video uri or file descriptor is not specified");
         }
 
-        if (mCurrentState != State.PREPARING) {
+        if (!isPreparing()) {
 
             boolean isAudio = isAudioSpecified();
 
@@ -705,8 +829,16 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
                 if (isAudio) {
 
-                    logger.debug("audio data source: " + mAudioUri);
-                    mMediaPlayer.setDataSource(mContext, mAudioUri, mHeaders);
+                    if (mAudioUri != null) {
+                        logger.debug("audio data source: " + mAudioUri);
+                        mMediaPlayer.setDataSource(mContext, mAudioUri, mHeaders);
+                    } else if (mAudioFileDescriptor != null) {
+                        logger.debug("audio data source: " + mAudioFileDescriptor);
+                        mMediaPlayer.setDataSource(mAudioFileDescriptor.getFileDescriptor(), mAudioFileDescriptor.getStartOffset(), mAudioFileDescriptor.getLength());
+                    } else {
+                        throw new AssertionError("audio data source not specified");
+                    }
+
                     mMediaPlayer.setOnVideoSizeChangedListener(null);
                     mMediaPlayer.setDisplay(null);
 
@@ -716,8 +848,16 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                         throw new IllegalStateException("surface was not created");
                     }
 
-                    logger.debug("video data source: " + mVideoUri);
-                    mMediaPlayer.setDataSource(mContext, mVideoUri, mHeaders);
+                    if (mVideoUri != null) {
+                        logger.debug("video data source: " + mVideoUri);
+                        mMediaPlayer.setDataSource(mContext, mVideoUri, mHeaders);
+                    } else if (mVideoFileDescriptor != null) {
+                        logger.debug("video data source: " + mVideoFileDescriptor);
+                        mMediaPlayer.setDataSource(mVideoFileDescriptor.getFileDescriptor(), mVideoFileDescriptor.getStartOffset(), mVideoFileDescriptor.getLength());
+                    } else {
+                        throw new AssertionError("video data source not specified");
+                    }
+
                     mMediaPlayer.setOnVideoSizeChangedListener(mVideoSizeChangedListener);
                     mMediaPlayer.setDisplay(mVideoView.getHolder());
                 }
@@ -726,18 +866,14 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                 mMediaPlayer.setScreenOnWhilePlaying(!isAudio);
                 mMediaPlayer.setLooping(mLoopWhenPreparing);
 
-                final boolean result;
-
+                final long startPreparingTime = System.currentTimeMillis();
                 try {
-                    result = mExecutor.submit(new Callable<Boolean>() {
+                    mExecutor.submit(new Callable<Void>() {
 
                         @Override
-                        public Boolean call() throws Exception {
-
-                            final long startPreparingTime = System.currentTimeMillis();
+                        public Void call() throws Exception {
                             mMediaPlayer.prepareAsync();
-                            logger.debug("media player preparing time: " + (System.currentTimeMillis() - startPreparingTime) + " ms");
-                            return true;
+                            return null;
                         }
                     }).get(EXECUTOR_CALL_TIMEOUT, TimeUnit.SECONDS);
 
@@ -746,13 +882,12 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                     logger.error("an Exception occurred during get()", e);
                     throw new RuntimeException(e);
                 }
+                logger.debug("media player preparing time: " + (System.currentTimeMillis() - startPreparingTime) + " ms");
 
-                if (result) {
-                    // we don't set the target state here either, but preserve the
-                    // target state that was there before.
-                    setCurrentState(State.PREPARING);
-                    attachMediaController();
-                }
+                // we don't set the target state here either, but preserve the
+                // target state that was there before.
+                setCurrentState(State.PREPARING);
+                attachMediaController();
 
             } catch (IOException | IllegalArgumentException | IllegalStateException ex) {
                 logger.error("Unable to open content: " + (isAudioSpecified() ? mAudioUri : mVideoUri), ex);
@@ -782,16 +917,14 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         }
 
         if (mCurrentState != State.PLAYING) {
-            boolean result = true;
             if (isInPlaybackState()) {
+                boolean result;
+                final long startStartingTime = System.currentTimeMillis();
                 try {
                     result = mExecutor.submit(new Callable<Boolean>() {
                         @Override
                         public Boolean call() throws Exception {
-                            final long startStartingTime = System.currentTimeMillis();
                             mMediaPlayer.start();
-                            logger.debug("media player starting time: " + (System.currentTimeMillis() - startStartingTime) + " ms");
-                            setCurrentState(State.PLAYING);
                             return true;
                         }
                     }).get(EXECUTOR_CALL_TIMEOUT, TimeUnit.SECONDS);
@@ -799,14 +932,17 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                     e.printStackTrace();
                     logger.error("an Exception occurred during get()", e);
                     mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
+                    result = false;
+                }
+                if (result) {
+                    logger.debug("media player starting time: " + (System.currentTimeMillis() - startStartingTime) + " ms");
+                    setCurrentState(State.PLAYING);
+                    startPlaybackTimeTask();
+                } else {
+                    releasePlayer(true);
                 }
             }
-            if (result) {
-                startPlaybackTimeTask();
-                setTargetState(State.PLAYING);
-            } else {
-                releasePlayer(true);
-            }
+            setTargetState(State.PLAYING);
         }
     }
 
@@ -819,34 +955,32 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         }
 
         if (mCurrentState != State.PAUSED) {
-            boolean result = true;
-            if (isInPlaybackState()) {
-                if (mMediaPlayer.isPlaying()) {
-                    try {
-                        result = mExecutor.submit(new Callable<Boolean>() {
-                            @Override
-                            public Boolean call() throws Exception {
-                                final long startPausingTime = System.currentTimeMillis();
-                                mMediaPlayer.pause();
-                                logger.debug("media player pausing time: " + (System.currentTimeMillis() - startPausingTime) + " ms");
-                                setCurrentState(State.PAUSED);
-                                return true;
-                            }
-                        }).get(EXECUTOR_CALL_TIMEOUT, TimeUnit.SECONDS);
-
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        logger.error("an Exception occurred during get()", e);
-                        mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
-                    }
+            if (isPlaying()) {
+                boolean result;
+                final long startPausingTime = System.currentTimeMillis();
+                try {
+                    result = mExecutor.submit(new Callable<Boolean>() {
+                        @Override
+                        public Boolean call() throws Exception {
+                            mMediaPlayer.pause();
+                            return true;
+                        }
+                    }).get(EXECUTOR_CALL_TIMEOUT, TimeUnit.SECONDS);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    logger.error("an Exception occurred during get()", e);
+                    mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
+                    result = false;
+                }
+                if (result) {
+                    logger.debug("media player pausing time: " + (System.currentTimeMillis() - startPausingTime) + " ms");
                     stopPlaybackTimeTask();
+                    setCurrentState(State.PAUSED);
+                } else {
+                    releasePlayer(true);
                 }
             }
-            if (result) {
-                setTargetState(State.PAUSED);
-            } else {
-                releasePlayer(true);
-            }
+            setTargetState(State.PAUSED);
         }
     }
 
@@ -859,14 +993,14 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
         if (mCurrentState != State.IDLE) {
             if (isInPlaybackState()) {
+                boolean result;
+                final long startStoppingTime = System.currentTimeMillis();
                 try {
-                    mExecutor.submit(new Callable<Void>() {
+                    result = mExecutor.submit(new Callable<Boolean>() {
                         @Override
-                        public Void call() throws Exception {
-                            final long startStoppingTime = System.currentTimeMillis();
+                        public Boolean call() throws Exception {
                             mMediaPlayer.stop();
-                            logger.debug("media player stopping time: " + (System.currentTimeMillis() - startStoppingTime) + " ms");
-                            return null;
+                            return true;
                         }
                     }).get(EXECUTOR_CALL_TIMEOUT, TimeUnit.SECONDS);
 
@@ -874,6 +1008,10 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                     e.printStackTrace();
                     logger.error("an Exception occurred during get()", e);
                     mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
+                    result = false;
+                }
+                if (result) {
+                    logger.debug("media player stopping time: " + (System.currentTimeMillis() - startStoppingTime) + " ms");
                 }
             }
             releasePlayer(true);
@@ -882,7 +1020,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
     public void resume() {
         logger.debug("resume()");
-        openUri();
+        openDataSource();
     }
 
     public void suspend() {
@@ -897,7 +1035,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         if (intervalMs != notifyPlaybackTimeInterval) {
             notifyPlaybackTimeInterval = intervalMs;
             if (mPlaybackTimeTask.getIntervalMs() != intervalMs && isPlaying()) {
-                startPlaybackTimeTask();
+                restartPlaybackTimeTask();
             }
         }
     }
@@ -912,8 +1050,9 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
         mPlaybackTimeTask.addRunnableTask(new Runnable() {
 
-            private Uri lastUri;
-            private long lastPositionMs = 0;
+            private volatile AssetFileDescriptor lastFd;
+            private volatile Uri lastUri;
+            private volatile long lastPositionMs = 0;
 
             @Override
             public void run() {
@@ -925,10 +1064,13 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
                     final long currentDuration = getDuration();
                     final long currentPosition = getCurrentPosition();
-                    final Uri currentUri = getContentUri();
 
-                    if (!currentUri.equals(lastUri)) {
+                    final Uri currentUri = getContentUri();
+                    final AssetFileDescriptor currentFd = getContentAssetFileDescriptor();
+
+                    if (currentUri != null && !currentUri.equals(lastUri) || currentFd != null && !currentFd.equals(lastFd)) {
                         lastUri = currentUri;
+                        lastFd = currentFd;
                         lastPositionMs = 0;
                     }
 
@@ -972,21 +1114,25 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
             mReleasing = true;
 
+            boolean result;
+            final long startReleasingTime = System.currentTimeMillis();
             try {
-                mExecutor.submit(new Callable<Void>() {
+                result = mExecutor.submit(new Callable<Boolean>() {
                     @Override
-                    public Void call() throws Exception {
-                        final long startReleasingTime = System.currentTimeMillis();
+                    public Boolean call() throws Exception {
                         mMediaPlayer.reset();
                         mMediaPlayer.release();
-                        logger.debug("media player reset/release time: " + (System.currentTimeMillis() - startReleasingTime) + " ms");
-                        return null;
+                        return true;
                     }
                 }).get(EXECUTOR_CALL_TIMEOUT, TimeUnit.SECONDS);
             } catch (Exception e) {
                 e.printStackTrace();
                 logger.error("an Exception occurred during get()", e);
                 mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
+                result = false;
+            }
+            if (result) {
+                logger.debug("media player reset/release time: " + (System.currentTimeMillis() - startReleasingTime) + " ms");
             }
 
             stopPlaybackTimeTask();
@@ -1060,7 +1206,9 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
     public interface OnCompletionListener {
 
-        /** @param isLooping if track looping mode set */
+        /**
+         * @param isLooping if track looping mode set
+         */
         void onCompletion(boolean isLooping);
     }
 
@@ -1079,7 +1227,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         void onError(int what, int extra);
     }
 
-    private static class OnErrorObservable extends android.database.Observable<OnErrorListener> {
+    private static class OnErrorObservable extends Observable<OnErrorListener> {
 
         private void dispatchError(int what, int extra) {
             for (OnErrorListener l : mObservers) {
@@ -1126,7 +1274,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
             isSurfaceCreated = true;
 
             if (isVideoSpecified()) {
-                openUri();
+                openDataSource();
             }
         }
 
@@ -1145,12 +1293,16 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
     public interface OnPlaybackTimeUpdateTimeListener {
 
+        /**
+         * called not from main thread
+         */
         void onPlaybackTimeUpdateTime(int position, int duration);
     }
 
     private class PlaybackTimeUpdateTimeObservable extends Observable<OnPlaybackTimeUpdateTimeListener> {
 
         private void dispatchPlaybackTimeUpdated() {
+            logger.debug("dispatchPlaybackTimeUpdated(), position=" + getCurrentPosition() + ", duration=" + getDuration());
             for (OnPlaybackTimeUpdateTimeListener l : mObservers) {
                 l.onPlaybackTimeUpdateTime(getCurrentPosition(), getDuration());
             }

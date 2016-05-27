@@ -1,4 +1,4 @@
-package ru.altarix.tasksutils;
+package ru.maxsmr.tasksutils;
 
 import android.os.Handler;
 import android.os.HandlerThread;

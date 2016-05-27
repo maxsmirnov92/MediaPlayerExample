@@ -1,4 +1,4 @@
-package ru.altarix.tasksutils.taskrunnable;
+package ru.maxsmr.tasksutils.taskrunnable;
 
 import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;

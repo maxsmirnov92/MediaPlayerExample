@@ -193,9 +193,9 @@ public class PlaylistManager {
     @Nullable
     public Uri getCurrentTrackUri() {
         final Uri resourceUri;
-        if (mPlayerController.isAudioSpecified()) {
+        if (mPlayerController.isAudioSpecified() && mPlayerController.getAudioUri() != null) {
             resourceUri = mPlayerController.getAudioUri();
-        } else if (mPlayerController.isVideoSpecified()) {
+        } else if (mPlayerController.isVideoSpecified() && mPlayerController.getVideoUri() != null) {
             resourceUri = mPlayerController.getVideoUri();
         } else {
             resourceUri = null;
@@ -203,6 +203,7 @@ public class PlaylistManager {
         return resourceUri;
     }
 
+    @Nullable
     public String getCurrentTrackPath() {
         Uri trackUri = getCurrentTrackUri();
         return trackUri != null? trackUri.getPath() : null;
@@ -506,8 +507,11 @@ public class PlaylistManager {
         @Override
         public void onCurrentStateChanged(@NonNull MediaPlayerController.State currentState, @NonNull MediaPlayerController.State previousState) {
             if (!isTracksEmpty()) {
+
                 Uri currentTrackUri = getCurrentTrackUri();
                 String currentTrackUriString = currentTrackUri != null? currentTrackUri.toString() : null;
+
+
                 if (!TextUtils.isEmpty(currentTrackUriString)) {
                     if (indexOf(currentTrackUriString) == NO_POSITION) {
                         throw new IllegalStateException("track " + currentTrackUriString + " not found in playlist!");

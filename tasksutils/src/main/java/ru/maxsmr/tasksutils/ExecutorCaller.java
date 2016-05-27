@@ -1,4 +1,4 @@
-package ru.altarix.tasksutils;
+package ru.maxsmr.tasksutils;
 
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;

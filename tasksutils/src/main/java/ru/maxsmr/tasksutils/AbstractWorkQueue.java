@@ -1,12 +1,12 @@
-package ru.altarix.tasksutils;
+package ru.maxsmr.tasksutils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.LinkedList;
 
-import ru.altarix.tasksutils.taskrunnable.RunnableInfo;
-import ru.altarix.tasksutils.taskrunnable.TaskRunnable;
+import ru.maxsmr.tasksutils.taskrunnable.RunnableInfo;
+import ru.maxsmr.tasksutils.taskrunnable.TaskRunnable;
 import ru.maxsmr.commonutils.data.FileHelper;
 
 public abstract class AbstractWorkQueue {

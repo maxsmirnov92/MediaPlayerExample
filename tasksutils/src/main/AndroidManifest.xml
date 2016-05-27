@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="ru.altarix.tasksutils">
+    package="ru.maxsmr.tasksutils">
 
     <application
         android:allowBackup="true"

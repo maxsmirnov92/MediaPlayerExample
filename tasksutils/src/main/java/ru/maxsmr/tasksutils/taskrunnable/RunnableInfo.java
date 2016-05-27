@@ -1,4 +1,4 @@
-package ru.altarix.tasksutils.taskrunnable;
+package ru.maxsmr.tasksutils.taskrunnable;
 
 import java.io.Serializable;
 
