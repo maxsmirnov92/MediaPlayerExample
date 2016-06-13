@@ -4,6 +4,7 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -25,6 +26,8 @@ public class ExecutorCaller {
         return sInstance;
     }
 
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+
     private static final int DEFAULT_EXECUTOR_CALL_TIMEOUT = 5;
 
     public <T> T getCallResult(int timeoutSec, @NonNull Callable<T> c, @Nullable Runnable callFinally) {
@@ -34,7 +37,7 @@ public class ExecutorCaller {
         }
 
         try {
-            Future<T> e = Executors.newSingleThreadExecutor().submit(c);
+            Future<T> e = executor.submit(c);
             return e.get(timeoutSec, TimeUnit.SECONDS);
         } catch (Exception e) {
             return null;

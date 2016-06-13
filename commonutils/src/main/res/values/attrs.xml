@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="MaskedEditText">
+        <attr name="mask" format="string"/>
+        <attr name="allowed_chars" format="string"/>
+        <attr name="denied_chars" format="string"/>
+        <attr name="char_representation" format="string"/>
+    </declare-styleable>
+    <attr name="custom_typeface" format="string"/>
+    <declare-styleable name="FontButton">
+        <attr name="custom_typeface"/>
+    </declare-styleable>
+    <declare-styleable name="FontCheckedTextView">
+        <attr name="custom_typeface"/>
+    </declare-styleable>
+    <declare-styleable name="FontEditText">
+        <attr name="custom_typeface"/>
+    </declare-styleable>
+    <declare-styleable name="FontMaskEditText">
+        <attr name="custom_typeface"/>
+    </declare-styleable>
+    <declare-styleable name="FontRadioButton">
+        <attr name="custom_typeface"/>
+    </declare-styleable>
+    <declare-styleable name="FontTextView">
+        <attr name="custom_typeface"/>
+    </declare-styleable>
+    <declare-styleable name="ViewPagerIndicator">
+        <attr name="normal_drawable" format="integer"/>
+        <attr name="selected_drawable" format="integer"/>
+        <attr name="margin_size" format="dimension"/>
+        <attr name="allow_display_single" format="boolean"/>
+    </declare-styleable>
+</resources>

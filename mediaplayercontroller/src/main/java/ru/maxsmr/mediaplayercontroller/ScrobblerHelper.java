@@ -1,6 +1,5 @@
 package ru.maxsmr.mediaplayercontroller;
 
-
 import android.content.Context;
 import android.content.Intent;
 import android.support.annotation.NonNull;
@@ -10,7 +9,7 @@ import android.text.TextUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import ru.maxsmr.commonutils.data.MetadataRetriever;
+import ru.maxsmr.commonutils.android.media.MetadataRetriever;
 import ru.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
 
 public class ScrobblerHelper {

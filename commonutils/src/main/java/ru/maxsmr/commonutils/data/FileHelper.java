@@ -246,7 +246,7 @@ public class FileHelper {
                     f = FileHelper.createNewFile(f.getName(), f.getParent());
 
                     if (f == null) {
-                        logger.error("can't create new file " + fileName + " in directory "  + parentPath);
+                        logger.error("can't create new file " + fileName + " in directory " + parentPath);
                         return null;
                     }
 
@@ -265,7 +265,7 @@ public class FileHelper {
             f = FileHelper.createNewFile(f.getName(), f.getParent());
 
             if (f == null) {
-                logger.error("can't create new file " + fileName + " in directory "  + parentPath);
+                logger.error("can't create new file " + fileName + " in directory " + parentPath);
                 return null;
             }
         }
@@ -419,11 +419,11 @@ public class FileHelper {
             } catch (Exception e) {
                 logger.error("an Exception occurred", e);
             } finally {
-                    try {
-                        inputStream.close();
-                    } catch (IOException e) {
-                        logger.error("an IOException occurred during close()", e);
-                    }
+                try {
+                    inputStream.close();
+                } catch (IOException e) {
+                    logger.error("an IOException occurred during close()", e);
+                }
             }
         }
 
@@ -1093,13 +1093,13 @@ public class FileHelper {
 
     public static void deleteFilesFromListExclude(Collection<File> targetFiles, Collection<File> excludeFiles) {
 //        if (excludeFiles != null && !excludeFiles.isEmpty()) {
-            for (File f : targetFiles) {
-                if (!excludeFiles.contains(f)) {
-                    if (!FileHelper.deleteFile(f)) {
-                        logger.error("can't delete file: " + f);
-                    }
+        for (File f : targetFiles) {
+            if (!excludeFiles.contains(f)) {
+                if (!FileHelper.deleteFile(f)) {
+                    logger.error("can't delete file: " + f);
                 }
             }
+        }
 //        }
     }
 
@@ -1275,18 +1275,22 @@ public class FileHelper {
         return "com.google.android.apps.photos.content".equals(uri.getAuthority());
     }
 
-    /** users have read and run access to file; owner can modify */
+    /**
+     * users have read and run access to file; owner can modify
+     */
     public final static String FILE_PERMISSIONS_ALL = "755";
 
-    /** only owner has r/w/x access to file */
+    /**
+     * only owner has r/w/x access to file
+     */
     public final static String FILE_PERMISSIONS_OWNER = "700";
 
     /**
      * Copies a raw resource file, given its ID to the given location
      *
-     * @param ctx context
+     * @param ctx  context
      * @param mode file permissions (E.g.: "755")
-     * @throws IOException on error
+     * @throws IOException          on error
      * @throws InterruptedException when interrupted
      */
     public static boolean copyRawFile(Context ctx, @RawRes int resId, File destFile, String mode) throws IOException, InterruptedException {
@@ -1304,7 +1308,7 @@ public class FileHelper {
 
     public static boolean copyFromAssets(Context ctx, String assetsPath, File to, boolean rewrite) {
 
-        to = FileHelper.createNewFile(to != null? to.getName() : null, to != null? to.getParent() : null, rewrite);
+        to = FileHelper.createNewFile(to != null ? to.getName() : null, to != null ? to.getParent() : null, rewrite);
 
         if (to == null) {
             return false;
@@ -1337,7 +1341,7 @@ public class FileHelper {
     public static File copyFile(File sourceFile, String destDir, boolean rewrite) {
 
         if (!isFileCorrect(sourceFile)) {
-            throw new IllegalArgumentException("incorrect source file: "+ sourceFile);
+            throw new IllegalArgumentException("incorrect source file: " + sourceFile);
         }
 
         File destFile = createNewFile(sourceFile.getName(), destDir, rewrite);
@@ -1371,7 +1375,7 @@ public class FileHelper {
 
             ExifInterface exif = new ExifInterface(f.getAbsolutePath());
 
-            if (!CompareUtils.doubleEqual(loc.getLatitude(), 0.0d) || !CompareUtils.doubleEqual(loc.getLongitude(), 0.0d)) {
+            if (!CompareUtils.objectsEqual(loc.getLatitude(), 0.0d) || !CompareUtils.objectsEqual(loc.getLongitude(), 0.0d)) {
                 exif.setAttribute(ExifInterface.TAG_GPS_LATITUDE, String.valueOf(loc.getLatitude()));
                 exif.setAttribute(ExifInterface.TAG_GPS_LONGITUDE, String.valueOf(loc.getLongitude()));
             }
@@ -1394,7 +1398,7 @@ public class FileHelper {
      * @throws IllegalArgumentException
      * @throws IllegalAccessException
      */
-    public static boolean checkResourceIdExists(int id, Class<?> resType) throws NullPointerException, IllegalArgumentException, IllegalAccessException {
+    public static boolean checkResourceIdExists(int id, String resName, Class<?> resType) throws NullPointerException, IllegalArgumentException, IllegalAccessException {
 
         if (resType == null)
             throw new NullPointerException("resType is null");
@@ -1406,11 +1410,13 @@ public class FileHelper {
 
         for (Field field : fields) {
             field.setAccessible(true);
-            try {
-                if (field.getInt(null) == id)
-                    return true;
-            } catch (Exception e) {
-                logger.error("an Exception occurred during getInt()");
+            if (field.getName().equals(resName)) {
+                try {
+                    if (field.getInt(null) == id)
+                        return true;
+                } catch (Exception e) {
+                    logger.error("an Exception occurred during getInt()");
+                }
             }
         }
 

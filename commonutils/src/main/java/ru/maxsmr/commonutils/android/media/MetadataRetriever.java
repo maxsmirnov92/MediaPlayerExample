@@ -1,10 +1,11 @@
-package ru.maxsmr.commonutils.data;
+package ru.maxsmr.commonutils.android.media;
 
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.Context;
 import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.graphics.Point;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Build;
@@ -19,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.util.Map;
 
+import ru.maxsmr.commonutils.data.FileHelper;
 import ru.maxsmr.commonutils.graphic.GraphicUtils;
 
 public final class MetadataRetriever {
@@ -224,8 +226,7 @@ public final class MetadataRetriever {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
             metadata.hasAudio = extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO, Boolean.class);
             metadata.hasVideo = extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO, Boolean.class);
-            metadata.videoWidth = extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH, Integer.class);
-            metadata.videoHeight = extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT, Integer.class);
+            metadata.videoSize = new Point(extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH, Integer.class), extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT, Integer.class));
             metadata.bitrate = extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_BITRATE, Integer.class);
             metadata.timedTextLanguages = extractMetadataFieldNoThrow(retriever, MediaMetadataRetriever.METADATA_KEY_BITRATE, String.class);
         }
@@ -282,23 +283,25 @@ public final class MetadataRetriever {
         }
     }
 
-    // TODO not working
+    /**
+     * @param contentUri must have scheme "content://"
+     */
     @Nullable
-    public static Bitmap extractAlbumArt(@NonNull Context context, @Nullable Uri resourceUri) {
+    public static Bitmap extractAlbumArt(@NonNull Context context, @Nullable Uri contentUri) {
 
-        if (resourceUri == null) {
+        if (contentUri == null) {
             return null;
         }
 
-        if (!ContentResolver.SCHEME_CONTENT.equalsIgnoreCase(resourceUri.getScheme())) {
-            throw new IllegalArgumentException("incorrect uri scheme: " + resourceUri.getScheme() + ", must be " + ContentResolver.SCHEME_CONTENT);
+        if (!ContentResolver.SCHEME_CONTENT.equalsIgnoreCase(contentUri.getScheme())) {
+            throw new IllegalArgumentException("incorrect uri scheme: " + contentUri.getScheme() + ", must be " + ContentResolver.SCHEME_CONTENT);
         }
 
         String[] projections = {MediaStore.Audio.Media.ALBUM_ID};
 
         Cursor cursor = null;
         try {
-            cursor = context.getContentResolver().query(resourceUri, projections, null, null, null);
+            cursor = context.getContentResolver().query(contentUri, projections, null, null, null);
             if (cursor != null && cursor.isClosed() && cursor.getCount() > 0) {
                 Long albumId = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID));
                 cursor.moveToFirst();
@@ -315,6 +318,25 @@ public final class MetadataRetriever {
         return null;
     }
 
+    @Nullable
+    public static Bitmap getMediaFileCoverArt(@NonNull Context context, @Nullable String filePath) {
+        return !TextUtils.isEmpty(filePath) ? getMediaFileCoverArt(context, new Uri.Builder().scheme(ContentResolver.SCHEME_FILE).appendEncodedPath(filePath).toString()) : null;
+    }
+
+    @Nullable
+    public static Bitmap getMediaFileCoverArt(@NonNull Context context, @Nullable Uri resourceUri) {
+
+        if (resourceUri == null) {
+            return null;
+        }
+
+        if (!TextUtils.isEmpty(resourceUri.getScheme()) && !ContentResolver.SCHEME_FILE.equalsIgnoreCase(resourceUri.getScheme())) {
+            throw new IllegalArgumentException("incorrect uri scheme: " + resourceUri.getScheme() + ", must be " + ContentResolver.SCHEME_FILE);
+        }
+
+        MediaMetadataRetriever retriever = createMediaMetadataRetrieverNoThrow(context, resourceUri, null);
+        return retriever != null ? GraphicUtils.createBitmapByByteArray(retriever.getEmbeddedPicture(), 1) : null;
+    }
 
     public static class MediaMetadata {
 
@@ -352,9 +374,7 @@ public final class MetadataRetriever {
 
         public boolean hasVideo;
 
-        public int videoWidth;
-
-        public int videoHeight;
+        public Point videoSize;
 
         public int bitrate;
 
@@ -388,8 +408,7 @@ public final class MetadataRetriever {
                     ", compilation='" + compilation + '\'' +
                     ", hasAudio=" + hasAudio +
                     ", hasVideo=" + hasVideo +
-                    ", videoWidth=" + videoWidth +
-                    ", videoHeight=" + videoHeight +
+                    ", videoSize=" + videoSize +
                     ", bitrate=" + bitrate +
                     ", timedTextLanguages='" + timedTextLanguages + '\'' +
                     ", isDrm=" + isDrm +

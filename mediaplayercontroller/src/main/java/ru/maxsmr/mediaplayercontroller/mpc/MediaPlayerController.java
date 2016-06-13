@@ -1,5 +1,6 @@
 package ru.maxsmr.mediaplayercontroller.mpc;
 
+import android.app.Activity;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.res.AssetFileDescriptor;
@@ -7,11 +8,15 @@ import android.database.Observable;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
-import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.RawRes;
+import android.telephony.PhoneStateListener;
+import android.telephony.TelephonyManager;
 import android.text.TextUtils;
+import android.util.Pair;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -22,7 +27,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -30,22 +34,21 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import ru.maxsmr.commonutils.android.SynchronizedObservable;
+import ru.maxsmr.commonutils.android.media.MediaStoreInfoRetriever;
+import ru.maxsmr.commonutils.android.media.MetadataRetriever;
 import ru.maxsmr.commonutils.data.CompareUtils;
 import ru.maxsmr.commonutils.data.FileHelper;
-import ru.maxsmr.commonutils.data.MetadataRetriever;
-import ru.maxsmr.mediaplayercontroller.HeadsetPlugBroadcastReceiver;
+import ru.maxsmr.mediaplayercontroller.mpc.receivers.AudioFocusChangeReceiver;
+import ru.maxsmr.mediaplayercontroller.mpc.receivers.HeadsetPlugBroadcastReceiver;
+import ru.maxsmr.mediaplayercontroller.mpc.receivers.NoisyAudioBroadcastReceiver;
 import ru.maxsmr.tasksutils.ScheduledThreadPoolExecutorManager;
 
 public final class MediaPlayerController implements MediaController.MediaPlayerControl {
 
     private static final Logger logger = LoggerFactory.getLogger(MediaPlayerController.class);
 
-    public MediaPlayerController(@NonNull Context context) {
-        mContext = context;
-        init();
-    }
-
-    private final static int EXECUTOR_CALL_TIMEOUT = 60;
+    private final static int EXECUTOR_CALL_TIMEOUT = 30;
     private final ExecutorService mExecutor = Executors.newSingleThreadExecutor();
 
     public final static long DEFAULT_NOTIFY_PLAYBACK_TIME_INTERVAL = 1000;
@@ -62,6 +65,8 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     private State mTargetState = State.IDLE;
 
     private MediaPlayer mMediaPlayer;
+
+    private Looper mMediaLooper;
 
     private int mCurrentBufferPercentage = 0;
 
@@ -109,13 +114,23 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     public static final int POSITION_NO = -1;
     public static final int POSITION_START = 0;
 
+    public static float getAverageVolume() {
+        return (VOLUME_MAX + VOLUME_MIN) / 2f;
+    }
+
     @Nullable
     private MediaController mMediaController;
     @Nullable
     private View mAnchorView;
 
     @NonNull
+    private final AudioFocusChangeReceiver mAudioFocusChangeReceiver = new AudioFocusChangeReceiver();
+
+    @NonNull
     private final HeadsetPlugBroadcastReceiver mHeadsetPlugBroadcastReceiver = new HeadsetPlugBroadcastReceiver();
+
+    @NonNull
+    private final NoisyAudioBroadcastReceiver mNoisyBroadcastReceiver = new NoisyAudioBroadcastReceiver();
 
     private boolean mReleasing = false;
 
@@ -127,9 +142,36 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         return mCurrentState == State.RELEASED;
     }
 
+    public MediaPlayerController(@NonNull Context context) {
+        mContext = context;
+        init();
+    }
+
     private void init() {
+        registerReceivers();
+    }
+
+    public void registerReceivers() {
+        mNoisyBroadcastReceiver.register(mContext);
+        mNoisyBroadcastReceiver.getNoisyAudioObservable().registerObserver(mNoisyAudioListener);
         mHeadsetPlugBroadcastReceiver.register(mContext);
         mHeadsetPlugBroadcastReceiver.getHeadsetStateChangedObservable().registerObserver(mHeadsetStateChangeListener);
+
+        final TelephonyManager telephonyManager = (TelephonyManager) mContext.getSystemService(Activity.TELEPHONY_SERVICE);
+        if (telephonyManager != null) {
+            telephonyManager.listen(mPhoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
+        }
+    }
+
+    public void unregisterReceivers() {
+        mNoisyBroadcastReceiver.unregister(mContext);
+        mNoisyBroadcastReceiver.getNoisyAudioObservable().unregisterObserver(mNoisyAudioListener);
+        mHeadsetPlugBroadcastReceiver.getHeadsetStateChangedObservable().unregisterObserver(mHeadsetStateChangeListener);
+        mHeadsetPlugBroadcastReceiver.unregister(mContext);
+        final TelephonyManager telephonyManager = (TelephonyManager) mContext.getSystemService(Activity.TELEPHONY_SERVICE);
+        if (telephonyManager != null) {
+            telephonyManager.listen(mPhoneStateListener, PhoneStateListener.LISTEN_NONE);
+        }
     }
 
     @NonNull
@@ -213,9 +255,9 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
             synchronized (MediaPlayerController.this) {
                 logger.debug("onPrepared()");
 
-                if (Build.VERSION.SDK_INT > Build.VERSION_CODES.ICE_CREAM_SANDWICH_MR1) {
-                    logger.info("track info: " + Arrays.toString(mMediaPlayer.getTrackInfo()));
-                }
+//                if (Build.VERSION.SDK_INT > Build.VERSION_CODES.ICE_CREAM_SANDWICH_MR1) {
+//                    logger.info("track info: " + Arrays.toString(mMediaPlayer.getTrackInfo()));
+//                }
 
                 if (!isAudioSpecified() && !isVideoSpecified()) {
                     throw new IllegalStateException("audio/video uri or file descriptor is null, wtf?");
@@ -318,14 +360,16 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                     synchronized (MediaPlayerController.this) {
                         logger.info("onCompletion()");
 
-                        setCurrentState(State.IDLE);
-                        setTargetState(State.IDLE);
+                        if (!isLooping()) {
+                            setCurrentState(State.IDLE);
+                            setTargetState(State.IDLE);
+
+                            if (mMediaController != null) {
+                                mMediaController.hide();
+                            }
+                        }
 
                         completionObservable.dispatchCompleted();
-
-                        if (mMediaController != null) {
-                            mMediaController.hide();
-                        }
                     }
                 }
             };
@@ -361,26 +405,103 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     }
 
     @NonNull
+    private final AudioFocusChangeReceiver.OnAudioFocusChangeListener mAudioFocusChangleListener = new AudioFocusChangeReceiver.OnAudioFocusChangeListener() {
+        @Override
+        public void onAudioFocusGain() {
+            logger.debug("onAudioFocusGain()");
+            // resume playback
+            handleInterruptEventEnd();
+            if (mVolumeLeftWhenPrepared != VOLUME_NOT_SET && mVolumeRightWhenPrepared != VOLUME_NOT_SET) {
+                setVolume(mVolumeLeftWhenPrepared, mVolumeRightWhenPrepared);
+            }
+        }
+
+        @Override
+        public void onAudioFocusLoss() {
+            logger.debug("onAudioFocusLoss()");
+            // Lost focus for an unbounded amount of time: stop playback and release media player
+            suspend();
+        }
+
+        @Override
+        public void onAudioFocusLossTransient() {
+            logger.debug("onAudioFocusLossTransient()");
+            // Lost focus for a short time, but we have to stop
+            // playback. We don't release the media player because playback
+            // is likely to resume
+            handleInterruptEventStart();
+        }
+
+        @Override
+        public void onAudioFocusLossTransientCanDuck() {
+            logger.debug("onAudioFocusLossTransientCanDuck()");
+            // Lost focus for a short time, but it's ok to keep playing
+            // at an attenuated level
+            float previousVolumeLeft = mVolumeLeftWhenPrepared != VOLUME_NOT_SET ? mVolumeLeftWhenPrepared : getAverageVolume();
+            float previousVolumeRight = mVolumeRightWhenPrepared != VOLUME_NOT_SET ? mVolumeRightWhenPrepared : getAverageVolume();
+            setVolume(0.1f, 0.1f);
+            mVolumeLeftWhenPrepared = previousVolumeLeft;
+            mVolumeRightWhenPrepared = previousVolumeRight;
+        }
+    };
+
+    @NonNull
+    private final NoisyAudioBroadcastReceiver.OnNoisyAudioListener mNoisyAudioListener = new NoisyAudioBroadcastReceiver.OnNoisyAudioListener() {
+
+        @Override
+        public void onNoisyAudio() {
+            logger.debug("onNoisyAudio()");
+            stop();
+        }
+    };
+
+    @NonNull
     private final HeadsetPlugBroadcastReceiver.OnHeadsetStateChangedListener mHeadsetStateChangeListener = new HeadsetPlugBroadcastReceiver.OnHeadsetStateChangedListener() {
 
         @Override
         public void onHeadphonesPlugged(boolean hasMicrophone) {
             logger.debug("onHeadphonesPlugged(), hasMicrophone=" + hasMicrophone);
-            if (mTargetState == State.PLAYING) {
-                start();
-            }
+            handleInterruptEventEnd();
         }
 
         @Override
         public void onHeadphonesUnplugged() {
             logger.debug("onHeadphonesUnplugged()");
-            State oldState = getCurrentState();
-            pause();
-            if (oldState == State.PLAYING) {
-                setTargetState(State.PLAYING);
+            handleInterruptEventStart();
+        }
+    };
+
+    @NonNull
+    private final PhoneStateListener mPhoneStateListener = new PhoneStateListener() {
+
+        @Override
+        public void onCallStateChanged(int state, String incomingNumber) {
+            logger.debug("onCallStateChanged(), state=" + state + ", incomingNumber=" + incomingNumber);
+            if (state == TelephonyManager.CALL_STATE_RINGING) {
+                handleInterruptEventStart();
+            } else if (state == TelephonyManager.CALL_STATE_IDLE) {
+                handleInterruptEventEnd();
+            } else if (state == TelephonyManager.CALL_STATE_OFFHOOK) {
             }
         }
     };
+
+    private void handleInterruptEventStart() {
+        if (isPreparing() || isPlaying()) {
+            State previousState = getCurrentState();
+            State previousTargetState = getTargetState();
+            pause();
+            if (previousState == State.PLAYING || previousTargetState == State.PLAYING) {
+                setTargetState(State.PLAYING);
+            }
+        }
+    }
+
+    private void handleInterruptEventEnd() {
+        if (mTargetState == State.PLAYING) {
+            start();
+        }
+    }
 
     @Override
     public int getBufferPercentage() {
@@ -428,6 +549,11 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         mLoopWhenPreparing = toggle;
     }
 
+    @NonNull
+    public Pair<Float, Float> getPreparedVolume() {
+        return new Pair<>(mVolumeLeftWhenPrepared, mVolumeRightWhenPrepared);
+    }
+
     public void setVolume(float left, float right) {
         if (left < VOLUME_MIN || left > VOLUME_MAX) {
             throw new IllegalArgumentException("incorrect left volume: " + left);
@@ -451,7 +577,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
     @Nullable
     public AssetFileDescriptor getContentAssetFileDescriptor() {
-        return isAudioSpecified()? getAudioFileDescriptor() : getVideoFileDescriptor();
+        return isAudioSpecified() ? getAudioFileDescriptor() : getVideoFileDescriptor();
     }
 
     public boolean isAudioSpecified() {
@@ -484,6 +610,14 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         } else {
             setAudioUri(null);
         }
+    }
+
+    public void setAudioUriByMediaFileId(int id, boolean isExternal) {
+        setAudioUriByMediaFileInfo(new MediaStoreInfoRetriever.MediaFileInfo(id, isExternal));
+    }
+
+    public void setAudioUriByMediaFileInfo(@Nullable MediaStoreInfoRetriever.MediaFileInfo info) {
+        setAudioUri(info != null ? info.getContentUri() : null);
     }
 
     public void setAudioUri(@Nullable Uri audioUri) {
@@ -588,6 +722,14 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         } else {
             setVideoUri(null);
         }
+    }
+
+    public void setVideoUriByMediaFileId(int id, boolean isExternal) {
+        setVideoUriByMediaFileInfo(new MediaStoreInfoRetriever.MediaFileInfo(id, isExternal));
+    }
+
+    public void setVideoUriByMediaFileInfo(@Nullable MediaStoreInfoRetriever.MediaFileInfo info) {
+        setVideoUri(info != null ? info.getContentUri() : null);
     }
 
     public void setVideoUri(@Nullable Uri videoUri) {
@@ -811,10 +953,16 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
             // we shouldn't clear the target state, because somebody might have
             // called start() previously
-            releasePlayer(false);
+            suspend();
 
-            AudioManager am = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
-            am.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+//            AudioManager am = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
+//            am.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+            mAudioFocusChangeReceiver.requestFocus(mContext);
+
+            mMediaLooper = Looper.myLooper() != null ? Looper.myLooper() : Looper.getMainLooper();
+
+            boolean result;
+            final long startPreparingTime = System.currentTimeMillis();
 
             try {
                 mMediaPlayer = new MediaPlayer();
@@ -866,14 +1014,13 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                 mMediaPlayer.setScreenOnWhilePlaying(!isAudio);
                 mMediaPlayer.setLooping(mLoopWhenPreparing);
 
-                final long startPreparingTime = System.currentTimeMillis();
                 try {
-                    mExecutor.submit(new Callable<Void>() {
+                    result = mExecutor.submit(new Callable<Boolean>() {
 
                         @Override
-                        public Void call() throws Exception {
+                        public Boolean call() throws Exception {
                             mMediaPlayer.prepareAsync();
-                            return null;
+                            return true;
                         }
                     }).get(EXECUTOR_CALL_TIMEOUT, TimeUnit.SECONDS);
 
@@ -882,18 +1029,24 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                     logger.error("an Exception occurred during get()", e);
                     throw new RuntimeException(e);
                 }
-                logger.debug("media player preparing time: " + (System.currentTimeMillis() - startPreparingTime) + " ms");
 
+            } catch (IOException | IllegalArgumentException | IllegalStateException ex) {
+                ex.printStackTrace();
+                logger.error("Unable to open content: " + (isAudioSpecified() ? mAudioUri : mVideoUri), ex);
+                mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
+                result = false;
+            }
+
+            if (result) {
+                logger.debug("media player preparing time: " + (System.currentTimeMillis() - startPreparingTime) + " ms");
                 // we don't set the target state here either, but preserve the
                 // target state that was there before.
                 setCurrentState(State.PREPARING);
                 attachMediaController();
-
-            } catch (IOException | IllegalArgumentException | IllegalStateException ex) {
-                logger.error("Unable to open content: " + (isAudioSpecified() ? mAudioUri : mVideoUri), ex);
-                setCurrentState(State.IDLE);
-                setTargetState(State.IDLE);
-                mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
+            } else {
+//                setCurrentState(State.IDLE);
+//                setTargetState(State.IDLE);
+                releasePlayer(true);
             }
         }
     }
@@ -909,7 +1062,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     }
 
     @Override
-    public void start() {
+    public synchronized void start() {
         logger.debug("start()");
 
         if (isReleased()) {
@@ -1060,6 +1213,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
             }
 
             private void doUpdate() {
+//                logger.debug("doUpdate()");
                 if (isPlaying()) {
 
                     final long currentDuration = getDuration();
@@ -1074,13 +1228,18 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                         lastPositionMs = 0;
                     }
 
-                    if (currentPosition < lastPositionMs || currentPosition >= currentDuration) {
+                    if (isLooping() && (currentPosition < lastPositionMs || currentPosition >= currentDuration)) {
                         completionObservable.dispatchCompleted();
                     }
 
                     lastPositionMs = currentPosition;
 
-                    playbackTimeUpdateTimeObservable.dispatchPlaybackTimeUpdated();
+                    new Handler(mMediaLooper).post(new Runnable() {
+                        @Override
+                        public void run() {
+                            playbackTimeUpdateTimeObservable.dispatchPlaybackTimeUpdated();
+                        }
+                    });
                 }
             }
         });
@@ -1137,6 +1296,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
             stopPlaybackTimeTask();
 
+            mMediaLooper = null;
             mMediaPlayer = null;
 
             mCurrentBufferPercentage = 0;
@@ -1150,13 +1310,17 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                 setTargetState(State.IDLE);
             }
 
-            AudioManager am = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
-            am.abandonAudioFocus(null);
+//            AudioManager am = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
+//            am.abandonAudioFocus(null);
+            mAudioFocusChangeReceiver.abandonFocus(mContext);
 
             mReleasing = false;
         }
     }
 
+    /**
+     * can be called in any state
+     */
     public synchronized void release() {
         logger.debug("release()");
 
@@ -1167,8 +1331,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         releasePlayer(true);
         detachMediaController();
 
-        mHeadsetPlugBroadcastReceiver.getHeadsetStateChangedObservable().unregisterObserver(mHeadsetStateChangeListener);
-        mHeadsetPlugBroadcastReceiver.unregister(mContext);
+        unregisterReceivers();
 
         mExecutor.shutdown();
 
@@ -1189,17 +1352,41 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         void onTargetStateChanged(@NonNull State targetState);
     }
 
-    private class OnStateChangedObservable extends Observable<OnStateChangedListener> {
+    private class OnStateChangedObservable extends SynchronizedObservable<OnStateChangedListener> {
 
         private void dispatchCurrentStateChanged(@NonNull State previousState) {
-            for (OnStateChangedListener l : mObservers) {
-                l.onCurrentStateChanged(mCurrentState, previousState);
+            synchronized (mObservers) {
+                for (OnStateChangedListener l : copyOfObservers()) {
+                    l.onCurrentStateChanged(mCurrentState, previousState);
+                }
             }
         }
 
         private void dispatchTargetStateChanged() {
-            for (OnStateChangedListener l : mObservers) {
-                l.onTargetStateChanged(mTargetState);
+            synchronized (mObservers) {
+                for (OnStateChangedListener l : copyOfObservers()) {
+                    l.onTargetStateChanged(mTargetState);
+                }
+            }
+        }
+    }
+
+    public interface OnPlaybackTimeUpdateTimeListener {
+
+        /**
+         * called not from main thread
+         */
+        void onPlaybackTimeUpdateTime(int position, int duration);
+    }
+
+    private class PlaybackTimeUpdateTimeObservable extends SynchronizedObservable<OnPlaybackTimeUpdateTimeListener> {
+
+        private void dispatchPlaybackTimeUpdated() {
+//            logger.debug("dispatchPlaybackTimeUpdated(), position=" + getCurrentPosition() + ", duration=" + getDuration());
+            synchronized (mObservers) {
+                for (OnPlaybackTimeUpdateTimeListener l : copyOfObservers()) {
+                    l.onPlaybackTimeUpdateTime(getCurrentPosition(), getDuration());
+                }
             }
         }
     }
@@ -1212,11 +1399,13 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         void onCompletion(boolean isLooping);
     }
 
-    private class OnCompletionObservable extends Observable<OnCompletionListener> {
+    private class OnCompletionObservable extends SynchronizedObservable<OnCompletionListener> {
 
         private void dispatchCompleted() {
-            for (OnCompletionListener l : mObservers) {
-                l.onCompletion(isLooping());
+            synchronized (mObservers) {
+                for (OnCompletionListener l : copyOfObservers()) {
+                    l.onCompletion(isLooping());
+                }
             }
         }
 
@@ -1227,11 +1416,13 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         void onError(int what, int extra);
     }
 
-    private static class OnErrorObservable extends Observable<OnErrorListener> {
+    private static class OnErrorObservable extends SynchronizedObservable<OnErrorListener> {
 
         private void dispatchError(int what, int extra) {
-            for (OnErrorListener l : mObservers) {
-                l.onError(what, extra);
+            synchronized (mObservers) {
+                for (OnErrorListener l : copyOfObservers()) {
+                    l.onError(what, extra);
+                }
             }
         }
     }
@@ -1241,11 +1432,13 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         void onVideoSizeChanged(int width, int height);
     }
 
-    private static class OnVideoSizeChangedObservable extends Observable<OnVideoSizeChangedListener> {
+    private static class OnVideoSizeChangedObservable extends SynchronizedObservable<OnVideoSizeChangedListener> {
 
         private void dispatchOnVideoSizeChanged(int width, int height) {
-            for (OnVideoSizeChangedListener l : mObservers) {
-                l.onVideoSizeChanged(width, height);
+            synchronized (mObservers) {
+                for (OnVideoSizeChangedListener l : copyOfObservers()) {
+                    l.onVideoSizeChanged(width, height);
+                }
             }
         }
     }
@@ -1290,22 +1483,4 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
             }
         }
     };
-
-    public interface OnPlaybackTimeUpdateTimeListener {
-
-        /**
-         * called not from main thread
-         */
-        void onPlaybackTimeUpdateTime(int position, int duration);
-    }
-
-    private class PlaybackTimeUpdateTimeObservable extends Observable<OnPlaybackTimeUpdateTimeListener> {
-
-        private void dispatchPlaybackTimeUpdated() {
-            logger.debug("dispatchPlaybackTimeUpdated(), position=" + getCurrentPosition() + ", duration=" + getDuration());
-            for (OnPlaybackTimeUpdateTimeListener l : mObservers) {
-                l.onPlaybackTimeUpdateTime(getCurrentPosition(), getDuration());
-            }
-        }
-    }
 }

@@ -51,19 +51,22 @@ import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.List;
 
-import ru.maxsmr.commonutils.android.GuiUtils;
+import ru.maxsmr.commonutils.android.gui.GuiUtils;
 import ru.maxsmr.commonutils.data.FileHelper;
-import ru.maxsmr.mediaplayercontroller.PlaylistManager;
 import ru.maxsmr.mediaplayercontroller.ScrobblerHelper;
+import ru.maxsmr.mediaplayercontroller.facades.PlaylistManagerFacade;
 import ru.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
+import ru.maxsmr.mediaplayercontroller.playlist.PlaylistItem;
+import ru.maxsmr.mediaplayercontroller.playlist.PlaylistManager;
+import ru.maxsmr.mediaplayerexample.app.MediaPlayerExampleApp;
 import ru.maxsmr.mediaplayerexample.player.MediaPlayerFactory;
 
-public class TestActivity extends AppCompatActivity implements SurfaceHolder.Callback, MediaPlayerController.OnStateChangedListener, MediaPlayerController.OnErrorListener, MediaPlayerController.OnVideoSizeChangedListener, MediaPlayerController.OnPlaybackTimeUpdateTimeListener, PlaylistManager.OnTracksSetListener, SeekBar.OnSeekBarChangeListener {
+public class TestActivity extends AppCompatActivity implements SurfaceHolder.Callback, MediaPlayerController.OnStateChangedListener, MediaPlayerController.OnErrorListener, MediaPlayerController.OnVideoSizeChangedListener, MediaPlayerController.OnPlaybackTimeUpdateTimeListener, PlaylistManager.OnTracksSetListener<PlaylistItem>, SeekBar.OnSeekBarChangeListener {
 
     private static final Logger logger = LoggerFactory.getLogger(TestActivity.class);
 
     private MediaPlayerController mediaPlayerController;
-    private PlaylistManager playlistManager;
+    private PlaylistManager<PlaylistItem> playlistManager;
     private ScrobblerHelper scrobblerHelper;
 
     private Spinner navigationSpinner;
@@ -119,7 +122,10 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     }
 
     private void initPlaylistManager() {
-        playlistManager = new PlaylistManager(mediaPlayerController);
+        playlistManager = PlaylistManagerFacade.getInstance().get(MediaPlayerExampleApp.PLAYER_ALIAS);
+        if (playlistManager == null) {
+            throw new RuntimeException("playlistManager is not created");
+        }
         playlistManager.enableLoopPlaylist(true);
         playlistManager.getTracksSetObservable().registerObserver(this);
     }
@@ -459,11 +465,11 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
                             lastSelectedDirectory = directory;
 
                             List<File> folderFiles = FileHelper.getFiles(directory, false, null);
-                            List<String> filesList = new ArrayList<>();
+                            List<PlaylistItem>  playlistItems = new ArrayList<>();
                             for (File f : folderFiles) {
-                                filesList.add(f.getAbsolutePath());
+                                playlistItems.add(new PlaylistItem(f.getAbsolutePath()));
                             }
-                            playlistManager.setTracks(filesList);
+                            playlistManager.setTracks(playlistItems);
                             playlistManager.playFirstTrack();
                             hideFileSelectDialog();
                         }
@@ -578,7 +584,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
 //                                playlistManager.clearTracks();
 //                            }
                             playlistManager.setPlayMode(isVideo ? PlaylistManager.PlayMode.VIDEO : PlaylistManager.PlayMode.AUDIO);
-                            playlistManager.addTrack(url);
+                            playlistManager.addTrack(new PlaylistItem(url));
                             playlistManager.playLastTrack();
                         }
                     }
@@ -623,15 +629,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
         logger.debug("surfaceDestroyed()");
     }
 
-    @Override
-    public void onTracksSet(@NonNull List<String> newTracks) {
-        logger.debug("onTracksSet(), newTracks=" + newTracks);
-    }
 
-    @Override
-    public void onTracksNotSet(@NonNull List<String> incorrectTracks) {
-        logger.debug("onTracksNotSet(), incorrectTracks=" + incorrectTracks);
-    }
 
     @Override
     public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -653,6 +651,16 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     @Override
     public void onPlaybackTimeUpdateTime(int position, int duration) {
         trackBar.setProgress(position);
+    }
+
+    @Override
+    public void onTracksSet(@NonNull List<PlaylistItem> newTracks) {
+
+    }
+
+    @Override
+    public void onTracksNotSet(@NonNull List<PlaylistItem> incorrectTracks) {
+
     }
 
     private class PreviousClickListener implements View.OnClickListener {

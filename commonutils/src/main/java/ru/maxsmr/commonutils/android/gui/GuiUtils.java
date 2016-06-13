@@ -1,4 +1,4 @@
-package ru.maxsmr.commonutils.android;
+package ru.maxsmr.commonutils.android.gui;
 
 
 import android.app.Activity;
@@ -14,6 +14,8 @@ import android.os.Build;
 import android.support.annotation.ColorInt;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.design.widget.AppBarLayout;
+import android.support.design.widget.CoordinatorLayout;
 import android.support.design.widget.TextInputLayout;
 import android.support.v7.app.AlertDialog;
 import android.text.Editable;
@@ -26,6 +28,7 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
+import android.view.Window;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
@@ -87,6 +90,14 @@ public class GuiUtils {
         } else {
             textView.setText(text);
             textView.setVisibility(View.VISIBLE);
+        }
+    }
+
+    public static void setStatusBarColor(@ColorInt int colorId, @NonNull Window window) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+            window.setStatusBarColor(colorId);
         }
     }
 
@@ -499,6 +510,23 @@ public class GuiUtils {
             e.printStackTrace();
         }
         return null;
+    }
+
+    public static void collapseToolbar(CoordinatorLayout rootLayout, View coordinatorChild, AppBarLayout appbarLayout) {
+        boolean found = false;
+        for (int i = 0; i < rootLayout.getChildCount(); i++) {
+            if (rootLayout.getChildAt(i) == coordinatorChild) {
+                found = true;
+            }
+        }
+        if (!found) {
+            throw new IllegalArgumentException("view "+ coordinatorChild + " is not a child of " + rootLayout);
+        }
+        CoordinatorLayout.LayoutParams params = (CoordinatorLayout.LayoutParams) coordinatorChild.getLayoutParams();
+        AppBarLayout.ScrollingViewBehavior behavior = (AppBarLayout.ScrollingViewBehavior) params.getBehavior();
+        if (behavior != null) {
+            behavior.onNestedFling(rootLayout, appbarLayout, null, 0, 10000, true);
+        }
     }
 
 }

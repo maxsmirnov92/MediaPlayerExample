@@ -1,4 +1,4 @@
-package ru.maxsmr.commonutils.android;
+package ru.maxsmr.commonutils.android.certs;
 
 import android.content.Context;
 import android.support.annotation.NonNull;

@@ -68,12 +68,8 @@ public class ScheduledThreadPoolExecutorManager {
     private ScheduledThreadPoolExecutor executor;
 
     public boolean isRunning() {
+        return executor != null && (!executor.isShutdown() || !executor.isTerminated());
 
-        if (executor == null) {
-            return false;
-        }
-
-        return (!executor.isShutdown() || !executor.isTerminated());
     }
 
     private long intervalMs = 0;
@@ -97,7 +93,7 @@ public class ScheduledThreadPoolExecutorManager {
 
         for (Runnable runnable : runnableList) {
             logger.debug("scheduling runnable " + runnable + " with interval " + intervalMs + " ms...");
-            executor.scheduleAtFixedRate(runnable, 0, this.intervalMs = intervalMs, TimeUnit.MILLISECONDS);
+            executor.scheduleAtFixedRate(new WrappedRunnable(runnable), 0, this.intervalMs = intervalMs, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -125,6 +121,28 @@ public class ScheduledThreadPoolExecutorManager {
 
         executor = null;
         intervalMs = 0;
+    }
+
+    static class WrappedRunnable implements Runnable {
+
+        final Runnable command;
+
+        WrappedRunnable(Runnable command) {
+            this.command = command;
+            if (command == null) {
+                throw new NullPointerException("command is null");
+            }
+        }
+
+        @Override
+        public void run() {
+            try {
+                command.run();
+            } catch (Exception e) {
+                e.printStackTrace();
+                throw new RuntimeException("an exception was occurred during run()", e);
+            }
+        }
     }
 
 }

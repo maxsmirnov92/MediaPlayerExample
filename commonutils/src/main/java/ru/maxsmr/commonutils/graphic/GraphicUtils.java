@@ -50,8 +50,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+import ru.maxsmr.commonutils.android.media.MetadataRetriever;
 import ru.maxsmr.commonutils.data.FileHelper;
-import ru.maxsmr.commonutils.data.MetadataRetriever;
 
 public class GraphicUtils {
 

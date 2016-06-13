@@ -1,4 +1,4 @@
-package ru.maxsmr.mediaplayercontroller;
+package ru.maxsmr.mediaplayercontroller.mpc.receivers;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
