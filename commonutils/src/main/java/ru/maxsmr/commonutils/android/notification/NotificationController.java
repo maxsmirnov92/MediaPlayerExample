@@ -163,28 +163,34 @@ public class NotificationController {
             }
         }
 
-        if (info.actionInfo != null && info.actionInfo.action != NotificationActionInfo.NotificationAction.NONE && info.actionInfo.actionIntent != null) {
+        if (info.actionInfos != null) {
 
-            final PendingIntent pIntent;
+            for (NotificationActionInfo actionInfo : info.actionInfos) {
 
-            switch (info.actionInfo.action) {
-                case ACTIVITY:
-                    pIntent = PendingIntent.getActivity(context, 0, info.actionInfo.actionIntent, info.actionInfo.pIntentFlag);
-                    break;
+                if (actionInfo.action != NotificationActionInfo.NotificationAction.NONE) {
 
-                case SERVICE:
-                    pIntent = PendingIntent.getService(context, 0, info.actionInfo.actionIntent, info.actionInfo.pIntentFlag);
-                    break;
+                    final PendingIntent pIntent;
 
-                case BROADCAST:
-                    pIntent = PendingIntent.getBroadcast(context, 0, info.actionInfo.actionIntent, info.actionInfo.pIntentFlag);
-                    break;
+                    switch (actionInfo.action) {
+                        case ACTIVITY:
+                            pIntent = PendingIntent.getActivity(context, actionInfo.requestCode, actionInfo.actionIntent, actionInfo.pIntentFlag);
+                            break;
 
-                default:
-                    pIntent = null;
+                        case SERVICE:
+                            pIntent = PendingIntent.getService(context, actionInfo.requestCode, actionInfo.actionIntent, actionInfo.pIntentFlag);
+                            break;
+
+                        case BROADCAST:
+                            pIntent = PendingIntent.getBroadcast(context, actionInfo.requestCode, actionInfo.actionIntent, actionInfo.pIntentFlag);
+                            break;
+
+                        default:
+                            pIntent = null;
+                    }
+
+                    notificationBuilder.addAction(actionInfo.iconResId, actionInfo.title, pIntent);
+                }
             }
-
-            notificationBuilder.addAction(info.actionInfo.iconResId, info.actionInfo.title, pIntent);
         }
 
         if (info.progress >= 0 && info.progress <= 100) {
@@ -204,7 +210,7 @@ public class NotificationController {
     }
 
     /**
-     * must be at list
+     * @param id must be at list
      */
     public synchronized void updateNotification(int id, Notification noti) {
 

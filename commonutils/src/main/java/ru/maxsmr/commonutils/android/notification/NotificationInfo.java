@@ -4,10 +4,14 @@ import android.content.Intent;
 import android.support.annotation.DrawableRes;
 import android.support.annotation.Nullable;
 
+import java.util.Arrays;
+
 /**
  * Created by maxsmirnov on 10.09.15.
  */
 public class NotificationInfo {
+
+    public final static int PROGRESS_NOT_SET = -1;
 
     public int id;
 
@@ -21,7 +25,7 @@ public class NotificationInfo {
     public Intent contentIntent;
 
     @Nullable
-    public NotificationActionInfo actionInfo;
+    public NotificationActionInfo[] actionInfos;
 
     @DrawableRes
     public int iconResId;
@@ -38,8 +42,7 @@ public class NotificationInfo {
     @Nullable
     public String subText;
 
-    public int progress;
-
+    public int progress = PROGRESS_NOT_SET;
 
     @Override
     public String toString() {
@@ -55,7 +58,7 @@ public class NotificationInfo {
                 ", text='" + text + '\'' +
                 ", subText='" + subText + '\'' +
                 ", progress=" + progress +
-                ", actionInfo=" + actionInfo +
+                ", actionInfos=" + Arrays.toString(actionInfos) +
                 '}';
     }
 }

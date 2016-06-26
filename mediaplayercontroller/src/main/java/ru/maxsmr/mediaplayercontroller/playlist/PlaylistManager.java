@@ -123,7 +123,7 @@ public class PlaylistManager<T extends PlaylistItem> {
     }
 
     @NonNull
-    protected <T extends PlaylistItem> List<T> filterIncorrectTracks(@Nullable Collection<T> tracks) {
+    protected List<T> filterIncorrectTracks(@Nullable Collection<T> tracks) {
         List<T> incorrectTracks = new ArrayList<>();
         if (tracks != null) {
             Iterator<T> it = tracks.iterator();
@@ -669,8 +669,7 @@ public class PlaylistManager<T extends PlaylistItem> {
                     if (!contains) {
                         throw new IllegalStateException("track " + currentTrackUriString + " not found in playlist!");
                     }
-                }
-                else {
+                } else {
                     if (!contains) {
                         mCurrentTrackIndex = NO_POSITION;
                     }

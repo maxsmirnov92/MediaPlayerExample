@@ -47,9 +47,13 @@ import java.util.zip.ZipOutputStream;
 
 import ru.maxsmr.commonutils.R;
 
-public class FileHelper {
+public final class FileHelper {
 
     private final static Logger logger = LoggerFactory.getLogger(FileHelper.class);
+
+    public FileHelper() {
+        throw new AssertionError("no instances.");
+    }
 
     public static int getPartitionTotalSpaceKb(String path) {
         return isDirExists(path) ? (int) (new File(path).getTotalSpace() / 1024L) : 0;
@@ -376,12 +380,17 @@ public class FileHelper {
             while ((len = in.read(buff)) > 0)
                 out.write(buff, 0, len);
 
-            in.close();
-            out.close();
-
         } catch (IOException e) {
+            e.printStackTrace();
             logger.error("an IOException occurred", e);
             return false;
+        } finally {
+            try {
+                in.close();
+                out.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
 
         return true;

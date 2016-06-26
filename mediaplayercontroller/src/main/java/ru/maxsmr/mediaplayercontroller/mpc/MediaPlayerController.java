@@ -48,11 +48,14 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
     private static final Logger logger = LoggerFactory.getLogger(MediaPlayerController.class);
 
-    private final static int EXECUTOR_CALL_TIMEOUT = 30;
+    private final static int EXECUTOR_CALL_TIMEOUT_S = 30;
     private final ExecutorService mExecutor = Executors.newSingleThreadExecutor();
 
-    public final static long DEFAULT_NOTIFY_PLAYBACK_TIME_INTERVAL = 1000;
-    private long notifyPlaybackTimeInterval = DEFAULT_NOTIFY_PLAYBACK_TIME_INTERVAL;
+    public final static long DEFAULT_PREPARE_RESET_TIMEOUT_MS = 20000;
+    private long mPrepareResetTimeoutMs = DEFAULT_PREPARE_RESET_TIMEOUT_MS;
+
+    public final static long DEFAULT_NOTIFY_PLAYBACK_TIME_INTERVAL_MS = 1000;
+    private long mNotifyPlaybackTimeInterval = DEFAULT_NOTIFY_PLAYBACK_TIME_INTERVAL_MS;
     private final ScheduledThreadPoolExecutorManager mPlaybackTimeTask = new ScheduledThreadPoolExecutorManager("PlaybackTimeTask");
 
     @NonNull
@@ -67,6 +70,15 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     private MediaPlayer mMediaPlayer;
 
     private Looper mMediaLooper;
+
+    private final Runnable resetRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isPreparing()) {
+                releasePlayer(true);
+            }
+        }
+    };
 
     private int mCurrentBufferPercentage = 0;
 
@@ -132,10 +144,10 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     @NonNull
     private final NoisyAudioBroadcastReceiver mNoisyBroadcastReceiver = new NoisyAudioBroadcastReceiver();
 
-    private boolean mReleasing = false;
+    private boolean mReleasingPlayer = false;
 
-    public boolean isReleasing() {
-        return mReleasing;
+    public boolean isReleasingPlayer() {
+        return mReleasingPlayer;
     }
 
     public boolean isReleased() {
@@ -174,6 +186,17 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         }
     }
 
+    public long getPrepareResetTimeoutMs() {
+        return mPrepareResetTimeoutMs;
+    }
+
+    public void setPrepareResetTimeoutMs(long prepareResetTimeoutMs) {
+        if (prepareResetTimeoutMs <= 0) {
+            throw new IllegalArgumentException("incorrect prepareResetTimeoutMs: " + prepareResetTimeoutMs);
+        }
+        this.mPrepareResetTimeoutMs = prepareResetTimeoutMs;
+    }
+
     @NonNull
     public State getCurrentState() {
         return mCurrentState;
@@ -209,6 +232,13 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         return mStateChangedObservable;
     }
 
+    private final OnBufferingUpdateObservable mBufferingUpdateObservable = new OnBufferingUpdateObservable();
+
+    @NonNull
+    public Observable<OnBufferingUpdateListener> getBufferingUpdateObservable() {
+        return mBufferingUpdateObservable;
+    }
+
     private final OnVideoSizeChangedObservable mVideoSizeChangedObservable = new OnVideoSizeChangedObservable();
 
     @NonNull
@@ -226,7 +256,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                         if (mVideoWidth != width || mVideoHeight != height) {
                             throw new IllegalStateException("media player width/height does not match");
                         }
-                        if (mVideoWidth != 0 && mVideoHeight != 0) {
+                        if (mVideoWidth > 0 && mVideoHeight > 0) {
                             mVideoView.getHolder().setFixedSize(mVideoWidth, mVideoHeight);
                             mVideoView.requestLayout();
                         }
@@ -243,6 +273,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                 public void onBufferingUpdate(MediaPlayer mp, int percent) {
 //                    logger.debug("onBufferingUpdate(), percent=" + percent);
                     mCurrentBufferPercentage = percent;
+                    mBufferingUpdateObservable.dispatchOnOnBufferingUpdate(mCurrentBufferPercentage);
                 }
             };
 
@@ -254,6 +285,8 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         public void onPrepared(MediaPlayer mp) {
             synchronized (MediaPlayerController.this) {
                 logger.debug("onPrepared()");
+
+                new Handler(mMediaLooper).removeCallbacks(resetRunnable);
 
 //                if (Build.VERSION.SDK_INT > Build.VERSION_CODES.ICE_CREAM_SANDWICH_MR1) {
 //                    logger.info("track info: " + Arrays.toString(mMediaPlayer.getTrackInfo()));
@@ -360,6 +393,8 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                     synchronized (MediaPlayerController.this) {
                         logger.info("onCompletion()");
 
+                        completionObservable.dispatchCompleted();
+
                         if (!isLooping()) {
                             setCurrentState(State.IDLE);
                             setTargetState(State.IDLE);
@@ -368,8 +403,6 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                                 mMediaController.hide();
                             }
                         }
-
-                        completionObservable.dispatchCompleted();
                     }
                 }
             };
@@ -387,9 +420,9 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                 public boolean onError(MediaPlayer mp, int framework_err, int impl_err) {
                     logger.error("onError(), framework_err=" + framework_err + ", impl_err=" + impl_err);
 
-                    setCurrentState(State.IDLE);
-
                     mErrorObservable.dispatchError(framework_err, impl_err);
+
+                    setCurrentState(State.IDLE);
 
                     releasePlayer(true);
                     return true;
@@ -524,7 +557,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     }
 
     public boolean isInPlaybackState() {
-        return (mMediaPlayer != null && !isReleasing() &&
+        return (mMediaPlayer != null && !isReleasingPlayer() &&
                 mCurrentState != State.RELEASED &&
                 mCurrentState != State.IDLE &&
                 mCurrentState != State.PREPARING);
@@ -1022,7 +1055,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                             mMediaPlayer.prepareAsync();
                             return true;
                         }
-                    }).get(EXECUTOR_CALL_TIMEOUT, TimeUnit.SECONDS);
+                    }).get(EXECUTOR_CALL_TIMEOUT_S, TimeUnit.SECONDS);
 
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -1043,9 +1076,8 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                 // target state that was there before.
                 setCurrentState(State.PREPARING);
                 attachMediaController();
+                new Handler(mMediaLooper).postDelayed(resetRunnable, mPrepareResetTimeoutMs);
             } else {
-//                setCurrentState(State.IDLE);
-//                setTargetState(State.IDLE);
                 releasePlayer(true);
             }
         }
@@ -1080,7 +1112,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                             mMediaPlayer.start();
                             return true;
                         }
-                    }).get(EXECUTOR_CALL_TIMEOUT, TimeUnit.SECONDS);
+                    }).get(EXECUTOR_CALL_TIMEOUT_S, TimeUnit.SECONDS);
                 } catch (Exception e) {
                     e.printStackTrace();
                     logger.error("an Exception occurred during get()", e);
@@ -1118,7 +1150,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                             mMediaPlayer.pause();
                             return true;
                         }
-                    }).get(EXECUTOR_CALL_TIMEOUT, TimeUnit.SECONDS);
+                    }).get(EXECUTOR_CALL_TIMEOUT_S, TimeUnit.SECONDS);
                 } catch (Exception e) {
                     e.printStackTrace();
                     logger.error("an Exception occurred during get()", e);
@@ -1155,7 +1187,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                             mMediaPlayer.stop();
                             return true;
                         }
-                    }).get(EXECUTOR_CALL_TIMEOUT, TimeUnit.SECONDS);
+                    }).get(EXECUTOR_CALL_TIMEOUT_S, TimeUnit.SECONDS);
 
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -1173,7 +1205,9 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
     public void resume() {
         logger.debug("resume()");
-        openDataSource();
+        if (!(isPreparing() || isInPlaybackState())) {
+            openDataSource();
+        }
     }
 
     public void suspend() {
@@ -1185,8 +1219,8 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         if (intervalMs <= 0) {
             throw new IllegalArgumentException("incorrect intervalMs: " + intervalMs);
         }
-        if (intervalMs != notifyPlaybackTimeInterval) {
-            notifyPlaybackTimeInterval = intervalMs;
+        if (intervalMs != mNotifyPlaybackTimeInterval) {
+            mNotifyPlaybackTimeInterval = intervalMs;
             if (mPlaybackTimeTask.getIntervalMs() != intervalMs && isPlaying()) {
                 restartPlaybackTimeTask();
             }
@@ -1229,7 +1263,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                     }
 
                     if (isLooping() && (currentPosition < lastPositionMs || currentPosition >= currentDuration)) {
-                        completionObservable.dispatchCompleted();
+                        mCompletionListener.onCompletion(mMediaPlayer);
                     }
 
                     lastPositionMs = currentPosition;
@@ -1243,7 +1277,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                 }
             }
         });
-        mPlaybackTimeTask.start(notifyPlaybackTimeInterval);
+        mPlaybackTimeTask.start(mNotifyPlaybackTimeInterval);
     }
 
     private void startPlaybackTimeTask() {
@@ -1271,7 +1305,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
         if (mMediaPlayer != null) {
 
-            mReleasing = true;
+            mReleasingPlayer = true;
 
             boolean result;
             final long startReleasingTime = System.currentTimeMillis();
@@ -1283,7 +1317,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                         mMediaPlayer.release();
                         return true;
                     }
-                }).get(EXECUTOR_CALL_TIMEOUT, TimeUnit.SECONDS);
+                }).get(EXECUTOR_CALL_TIMEOUT_S, TimeUnit.SECONDS);
             } catch (Exception e) {
                 e.printStackTrace();
                 logger.error("an Exception occurred during get()", e);
@@ -1314,7 +1348,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 //            am.abandonAudioFocus(null);
             mAudioFocusChangeReceiver.abandonFocus(mContext);
 
-            mReleasing = false;
+            mReleasingPlayer = false;
         }
     }
 
@@ -1422,6 +1456,22 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
             synchronized (mObservers) {
                 for (OnErrorListener l : copyOfObservers()) {
                     l.onError(what, extra);
+                }
+            }
+        }
+    }
+
+    public interface OnBufferingUpdateListener {
+
+        void onBufferingUpdate(int percentage);
+    }
+
+    private static class OnBufferingUpdateObservable extends SynchronizedObservable<OnBufferingUpdateListener> {
+
+        private void dispatchOnOnBufferingUpdate(int percentage) {
+            synchronized (mObservers) {
+                for (OnBufferingUpdateListener l : copyOfObservers()) {
+                    l.onBufferingUpdate(percentage);
                 }
             }
         }

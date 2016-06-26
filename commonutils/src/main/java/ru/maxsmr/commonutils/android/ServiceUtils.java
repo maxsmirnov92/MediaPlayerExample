@@ -15,6 +15,7 @@ import android.support.annotation.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import ru.maxsmr.commonutils.android.notification.NotificationActionInfo;
 import ru.maxsmr.commonutils.android.notification.NotificationController;
 import ru.maxsmr.commonutils.android.notification.NotificationInfo;
 
@@ -23,6 +24,7 @@ public final class ServiceUtils {
     private final static Logger logger = LoggerFactory.getLogger(ServiceUtils.class);
 
     private ServiceUtils() {
+        throw new AssertionError("no instances.");
     }
 
     public static <S extends Service> boolean isServiceRunning(@NonNull Context context, @NonNull Class<S> serviceClass) {
@@ -129,9 +131,14 @@ public final class ServiceUtils {
         }
     }
 
-    public static void startServiceForeground(@NonNull Context context, @NonNull Service service, int id, @Nullable Intent contentIntent, @Nullable String ticker, @Nullable String title, @Nullable String text, @DrawableRes int iconRes) {
+    public static void startServiceForeground(@NonNull Service service, int id, @NonNull NotificationInfo notificationInfo) {
+        logger.debug("startServiceForeground(), service=" + service + ", id=" + id + ", notificationInfo=" + notificationInfo);
+        startServiceForeground(service, id, notificationInfo.contentIntent, notificationInfo.tickerText, notificationInfo.contentTitle, notificationInfo.text, notificationInfo.iconResId, notificationInfo.actionInfos);
+    }
+
+    public static void startServiceForeground(@NonNull Service service, int id, @Nullable Intent contentIntent, @Nullable String ticker, @Nullable String title, @Nullable String text, @DrawableRes int iconRes, NotificationActionInfo... actionInfos) {
         logger.debug("startServiceForeground(), service=" + service + ", id=" + id + ", contentIntent=" + contentIntent + ", ticker=" + ticker + ", title=" + title + ", text=" + text + ", iconRes=" + iconRes);
-        if (!isServiceForeground(context, service.getClass())) {
+        if (!isServiceForeground(service, service.getClass())) {
 
             NotificationController.getInstance().removeNotification(id);
 
@@ -141,6 +148,7 @@ public final class ServiceUtils {
             info.onlyUpdate = false;
             info.ongoing = true;
             info.contentIntent = contentIntent;
+            info.actionInfos = actionInfos;
             info.tickerText = ticker;
             info.contentTitle = title;
             info.text = text;
@@ -149,9 +157,9 @@ public final class ServiceUtils {
         }
     }
 
-    public static <S extends Service> void stopServiceForeground(@NonNull Context context, @NonNull S service, int id) {
+    public static <S extends Service> void stopServiceForeground(@NonNull S service, int id) {
         logger.debug("stopServiceForeground(), service=" + service + ", id=" + id);
-        if (isServiceForeground(context, service.getClass())) {
+        if (isServiceForeground(service, service.getClass())) {
             service.stopForeground(true);
             NotificationController.getInstance().removeNotification(id);
         }
@@ -172,6 +180,5 @@ public final class ServiceUtils {
         logger.debug("unbindService(), serviceConnection=" + serviceConnection);
         context.unbindService(serviceConnection);
     }
-
 
 }
