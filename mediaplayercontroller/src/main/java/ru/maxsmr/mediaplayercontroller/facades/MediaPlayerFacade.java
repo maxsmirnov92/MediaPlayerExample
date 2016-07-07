@@ -62,11 +62,13 @@ public final class MediaPlayerFacade {
         return mpc;
     }
 
-    public void release() {
-        for (MediaPlayerController mpc : mCached.values()) {
-            mpc.release();
+    public static void releaseInstance() {
+        if (sInstance != null) {
+            for (MediaPlayerController mpc : sInstance.mCached.values()) {
+                mpc.release();
+            }
+            sInstance.mCached.clear();
         }
-        mCached.clear();
     }
 
 }

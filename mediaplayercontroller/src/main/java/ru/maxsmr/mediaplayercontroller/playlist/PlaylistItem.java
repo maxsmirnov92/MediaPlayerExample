@@ -1,7 +1,5 @@
 package ru.maxsmr.mediaplayercontroller.playlist;
 
-import ru.maxsmr.commonutils.data.StringUtils;
-
 public class PlaylistItem {
 
     /** may be full uri or file path  */
@@ -9,9 +7,9 @@ public class PlaylistItem {
 
     public PlaylistItem(String track) {
 
-        if (StringUtils.isEmpty(track)) {
-            throw new IllegalArgumentException("empty track: " + track);
-        }
+//        if (StringUtils.isEmpty(track)) {
+//            throw new IllegalArgumentException("empty track: " + track);
+//        }
 
         this.track = track;
     }

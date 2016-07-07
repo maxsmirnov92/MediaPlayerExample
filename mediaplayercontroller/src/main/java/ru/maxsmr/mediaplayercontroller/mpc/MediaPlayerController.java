@@ -58,8 +58,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     private long mNotifyPlaybackTimeInterval = DEFAULT_NOTIFY_PLAYBACK_TIME_INTERVAL_MS;
     private final ScheduledThreadPoolExecutorManager mPlaybackTimeTask = new ScheduledThreadPoolExecutorManager("PlaybackTimeTask");
 
-    @NonNull
-    private final Context mContext;
+    private Context mContext;
 
     @NonNull
     private State mCurrentState = State.IDLE;
@@ -150,6 +149,10 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         return mReleasingPlayer;
     }
 
+    public boolean isPlayerReleased() {
+        return (mCurrentState == State.IDLE || mCurrentState == State.RELEASED) && mMediaPlayer == null;
+    }
+
     public boolean isReleased() {
         return mCurrentState == State.RELEASED;
     }
@@ -163,7 +166,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         registerReceivers();
     }
 
-    public void registerReceivers() {
+    private void registerReceivers() {
         mNoisyBroadcastReceiver.register(mContext);
         mNoisyBroadcastReceiver.getNoisyAudioObservable().registerObserver(mNoisyAudioListener);
         mHeadsetPlugBroadcastReceiver.register(mContext);
@@ -175,7 +178,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         }
     }
 
-    public void unregisterReceivers() {
+    private void unregisterReceivers() {
         mNoisyBroadcastReceiver.unregister(mContext);
         mNoisyBroadcastReceiver.getNoisyAudioObservable().unregisterObserver(mNoisyAudioListener);
         mHeadsetPlugBroadcastReceiver.getHeadsetStateChangedObservable().unregisterObserver(mHeadsetStateChangeListener);
@@ -422,7 +425,9 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
                     mErrorObservable.dispatchError(framework_err, impl_err);
 
-                    releasePlayer(true);
+                    if (!isReleasingPlayer()) {
+                        releasePlayer(true);
+                    }
                     return true;
                 }
             };
@@ -1063,20 +1068,21 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
 
             } catch (IOException | IllegalArgumentException | IllegalStateException ex) {
                 ex.printStackTrace();
-                logger.error("Unable to open content: " + (isAudioSpecified() ? mAudioUri : mVideoUri), ex);
-                mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
+                logger.error("Unable to open content: " + (isAudioSpecified() ? (mAudioUri != null? mAudioUri : mAudioFileDescriptor) : (mVideoUri != null? mVideoUri : mVideoFileDescriptor)), ex);
+//                mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
                 result = false;
             }
 
             if (result) {
-                logger.debug("media player preparing time: " + (System.currentTimeMillis() - startPreparingTime) + " ms");
+                logger.debug("media player preparing success / time: " + (System.currentTimeMillis() - startPreparingTime) + " ms");
                 // we don't set the target state here either, but preserve the
                 // target state that was there before.
                 setCurrentState(State.PREPARING);
                 attachMediaController();
                 new Handler(mMediaLooper).postDelayed(resetRunnable, mPrepareResetTimeoutMs);
             } else {
-                releasePlayer(true);
+                logger.error("media player preparing failed / time: " + (System.currentTimeMillis() - startPreparingTime) + " ms");
+                mErrorListener.onError(mMediaPlayer, MediaError.PREPARE_UNKNOWN, MediaError.UNKNOWN);
             }
         }
     }
@@ -1114,15 +1120,16 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                 } catch (Exception e) {
                     e.printStackTrace();
                     logger.error("an Exception occurred during get()", e);
-                    mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
+//                    mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
                     result = false;
                 }
                 if (result) {
-                    logger.debug("media player starting time: " + (System.currentTimeMillis() - startStartingTime) + " ms");
+                    logger.debug("media player starting success / time: " + (System.currentTimeMillis() - startStartingTime) + " ms");
                     setCurrentState(State.PLAYING);
                     startPlaybackTimeTask();
                 } else {
-                    releasePlayer(true);
+                    logger.error("media player starting failed / time: " + (System.currentTimeMillis() - startStartingTime) + " ms");
+                    mErrorListener.onError(mMediaPlayer, MediaError.PLAY_UNKNOWN, MediaError.UNKNOWN);
                 }
             }
             setTargetState(State.PLAYING);
@@ -1152,15 +1159,16 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                 } catch (Exception e) {
                     e.printStackTrace();
                     logger.error("an Exception occurred during get()", e);
-                    mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
+//                    mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
                     result = false;
                 }
                 if (result) {
-                    logger.debug("media player pausing time: " + (System.currentTimeMillis() - startPausingTime) + " ms");
+                    logger.debug("media player pausing success / time: " + (System.currentTimeMillis() - startPausingTime) + " ms");
                     stopPlaybackTimeTask();
                     setCurrentState(State.PAUSED);
                 } else {
-                    releasePlayer(true);
+                    logger.error("media player pausing failed / time: " + (System.currentTimeMillis() - startPausingTime) + " ms");
+                    mErrorListener.onError(mMediaPlayer, MediaError.PAUSE_UNKNOWN, MediaError.UNKNOWN);
                 }
             }
             setTargetState(State.PAUSED);
@@ -1190,14 +1198,19 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                 } catch (Exception e) {
                     e.printStackTrace();
                     logger.error("an Exception occurred during get()", e);
-                    mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
+//                    mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
                     result = false;
                 }
                 if (result) {
-                    logger.debug("media player stopping time: " + (System.currentTimeMillis() - startStoppingTime) + " ms");
+                    logger.debug("media player stopping success / time: " + (System.currentTimeMillis() - startStoppingTime) + " ms");
+                } else {
+                    logger.error("media player stopping failed / time: " + (System.currentTimeMillis() - startStoppingTime) + " ms");
+                    mErrorListener.onError(mMediaPlayer, MediaError.STOP_UNKNOWN, MediaError.UNKNOWN);
                 }
             }
-            releasePlayer(true);
+            if (!isPlayerReleased()) {
+                releasePlayer(true);
+            }
         }
     }
 
@@ -1292,7 +1305,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     }
 
     /*
-     * release the media player in any state
+     * release the media player at any state
      */
     private synchronized void releasePlayer(boolean clearTargetState) {
         logger.debug("releasePlayer(), clearTargetState=" + clearTargetState);
@@ -1301,7 +1314,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
             throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was released");
         }
 
-        if (mMediaPlayer != null) {
+        if (!isReleasingPlayer() && !isPlayerReleased()) {
 
             mReleasingPlayer = true;
 
@@ -1319,11 +1332,15 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
             } catch (Exception e) {
                 e.printStackTrace();
                 logger.error("an Exception occurred during get()", e);
-                mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
+//                mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
                 result = false;
             }
+            
             if (result) {
-                logger.debug("media player reset/release time: " + (System.currentTimeMillis() - startReleasingTime) + " ms");
+                logger.debug("media player reset/release success / time: " + (System.currentTimeMillis() - startReleasingTime) + " ms");
+            } else {
+                logger.error("media player reset/release failed / time: " + (System.currentTimeMillis() - startReleasingTime) + " ms");
+                mErrorListener.onError(mMediaPlayer, MediaError.RELEASE_UNKNOWN, MediaError.UNKNOWN);
             }
 
             stopPlaybackTimeTask();
@@ -1368,6 +1385,8 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         mExecutor.shutdown();
 
         setCurrentState(State.RELEASED);
+
+        mContext = null;
     }
 
     /**
@@ -1533,7 +1552,12 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
     };
 
     public interface MediaError {
-        int UNKNOWN = -1;
-        int PREPARE_TIMEOUT_EXCEEDED = 1<<10;
+        int UNKNOWN = MediaPlayer.MEDIA_ERROR_UNKNOWN;
+        int PREPARE_TIMEOUT_EXCEEDED = 10<<0;
+        int PREPARE_UNKNOWN = 10<<1;
+        int PLAY_UNKNOWN = 10<<2;
+        int PAUSE_UNKNOWN = 10<<3;
+        int STOP_UNKNOWN = 10<<4;
+        int RELEASE_UNKNOWN = 10<<5;
     }
 }

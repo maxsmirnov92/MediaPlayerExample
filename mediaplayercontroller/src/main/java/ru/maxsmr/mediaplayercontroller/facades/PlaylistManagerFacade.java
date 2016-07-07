@@ -27,6 +27,15 @@ public class PlaylistManagerFacade {
         return sInstance;
     }
 
+    public static void releaseInstance() {
+        if (sInstance != null) {
+            for (PlaylistManager<?> manager : sInstance.mCached.values()) {
+                manager.release();
+            }
+            sInstance.mCached.clear();
+        }
+    }
+
     @NonNull
     private LinkedHashMap<String, PlaylistManager<?>> mCached = new LinkedHashMap<>();
 
@@ -118,12 +127,5 @@ public class PlaylistManagerFacade {
                 }
             }
         }
-    }
-
-    public void release() {
-        for (PlaylistManager<?> manager : mCached.values()) {
-            manager.release();
-        }
-        mCached.clear();
     }
 }
