@@ -29,7 +29,7 @@ public class ScheduledThreadPoolExecutorManager {
         }
 
         if (isRunning()) {
-            start(intervalMs);
+            start(delayMs, intervalMs);
         }
     }
 
@@ -43,7 +43,7 @@ public class ScheduledThreadPoolExecutorManager {
         }
 
         if (isRunning()) {
-            start(intervalMs);
+            start(delayMs, intervalMs);
         }
     }
 
@@ -72,17 +72,26 @@ public class ScheduledThreadPoolExecutorManager {
 
     }
 
+    private long delayMs = 0;
+
+    public long getDelayMs() {
+        return delayMs;
+    }
+
     private long intervalMs = 0;
 
     public long getIntervalMs() {
         return intervalMs;
     }
 
-    public synchronized void start(long intervalMs) {
+    public synchronized void start(long delayMs, long intervalMs) {
         logger.debug("start(), intervalMs=" + intervalMs);
 
         if (intervalMs <= 0)
             throw new IllegalArgumentException("can't start executor: incorrect intervalMs: " + intervalMs);
+
+        if (delayMs < 0)
+            throw new IllegalArgumentException("can't start executor: incorrect delayMs: " + delayMs);
 
         if (runnableList.isEmpty())
             throw new RuntimeException("no runnables to schedule");
@@ -93,7 +102,7 @@ public class ScheduledThreadPoolExecutorManager {
 
         for (Runnable runnable : runnableList) {
             logger.debug("scheduling runnable " + runnable + " with interval " + intervalMs + " ms...");
-            executor.scheduleAtFixedRate(new WrappedRunnable(runnable), 0, this.intervalMs = intervalMs, TimeUnit.MILLISECONDS);
+            executor.scheduleAtFixedRate(new WrappedRunnable(runnable), delayMs, this.intervalMs = intervalMs, TimeUnit.MILLISECONDS);
         }
     }
 

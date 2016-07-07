@@ -75,7 +75,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
         @Override
         public void run() {
             if (isPreparing()) {
-                releasePlayer(true);
+                mErrorListener.onError(mMediaPlayer, MediaError.PREPARE_TIMEOUT_EXCEEDED, MediaError.UNKNOWN);
             }
         }
     };
@@ -421,8 +421,6 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                     logger.error("onError(), framework_err=" + framework_err + ", impl_err=" + impl_err);
 
                     mErrorObservable.dispatchError(framework_err, impl_err);
-
-                    setCurrentState(State.IDLE);
 
                     releasePlayer(true);
                     return true;
@@ -1277,7 +1275,7 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
                 }
             }
         });
-        mPlaybackTimeTask.start(mNotifyPlaybackTimeInterval);
+        mPlaybackTimeTask.start(0, mNotifyPlaybackTimeInterval);
     }
 
     private void startPlaybackTimeTask() {
@@ -1533,4 +1531,9 @@ public final class MediaPlayerController implements MediaController.MediaPlayerC
             }
         }
     };
+
+    public interface MediaError {
+        int UNKNOWN = -1;
+        int PREPARE_TIMEOUT_EXCEEDED = 1<<10;
+    }
 }

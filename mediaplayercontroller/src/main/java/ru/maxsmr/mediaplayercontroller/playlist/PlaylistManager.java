@@ -584,7 +584,8 @@ public class PlaylistManager<T extends PlaylistItem> {
             rangeCheck(in);
             if (track != null && isTrackValid(track.track)) {
                 mTracks.set(in, track);
-                if (in == mCurrentTrackIndex) {
+                T currentTrack = getCurrentTrack();
+                if (in == mCurrentTrackIndex && currentTrack != null && !CompareUtils.stringsEqual(currentTrack.track, track.track, true)) {
                     resetTrack();
                     playTrack(in);
                 }
