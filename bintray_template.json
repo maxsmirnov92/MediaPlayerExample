@@ -1,0 +1,22 @@
+{
+
+  "package": {
+    "name": "MediaPlayerController",
+    "repo": "maven",
+    "subject": "maxsmirnov92"
+  },
+
+  "version": {
+    "name": "[version]"
+  },
+
+  "files": [
+    {
+      "includePattern": "mediaplayercontroller/build/release/(.*)",
+      "uploadPattern": "$1"
+    }
+  ],
+
+  "publish": true
+
+}
