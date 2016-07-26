@@ -40,6 +40,14 @@ import android.widget.SpinnerAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import net.maxsmr.commonutils.android.gui.GuiUtils;
+import net.maxsmr.commonutils.data.FileHelper;
+import net.maxsmr.mediaplayercontroller.ScrobblerHelper;
+import net.maxsmr.mediaplayercontroller.facades.PlaylistManagerFacade;
+import net.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
+import net.maxsmr.mediaplayercontroller.playlist.PlaylistItem;
+import net.maxsmr.mediaplayercontroller.playlist.PlaylistManager;
+
 import org.ngweb.android.api.filedialog.FileDialog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,13 +59,6 @@ import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.List;
 
-import ru.maxsmr.commonutils.android.gui.GuiUtils;
-import ru.maxsmr.commonutils.data.FileHelper;
-import ru.maxsmr.mediaplayercontroller.ScrobblerHelper;
-import ru.maxsmr.mediaplayercontroller.facades.PlaylistManagerFacade;
-import ru.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
-import ru.maxsmr.mediaplayercontroller.playlist.PlaylistItem;
-import ru.maxsmr.mediaplayercontroller.playlist.PlaylistManager;
 import ru.maxsmr.mediaplayerexample.app.MediaPlayerExampleApp;
 import ru.maxsmr.mediaplayerexample.player.MediaPlayerFactory;
 

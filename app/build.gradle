@@ -41,5 +41,5 @@ dependencies {
     compile files('libs/FileDialog-0.1.jar')
 
     compile project(':mediaplayercontroller')
-//    compile 'ru.maxsmr.mediaplayercontroller:1.0'
+//    compile 'net.maxsmr.mediaplayercontroller:1.0'
 }

@@ -1,7 +1,7 @@
 apply plugin: 'com.android.library'
 apply plugin: 'maven'
 
-def groupId = "ru.maxsmr"
+def groupId = "net.maxsmr"
 def artifactId = "mediaplayercontroller"
 def version = "1.0"
 
@@ -21,12 +21,12 @@ android {
         versionName version
     }
     buildTypes {
-        debug {
-
-        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        debug {
+
         }
     }
     compileOptions {
@@ -39,16 +39,16 @@ configurations {
     javadocDependencies
 }
 
-task javaDocs(type: Javadoc) {
-    source = android.sourceSets.main.java.srcDirs
-    classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
-    classpath += configurations.javadocDependencies
-}
-
-task javaDocsJar(type: Jar, dependsOn: javaDocs) {
-    classifier = 'javadoc'
-    from javaDocs.destinationDir
-}
+//task javaDocs(type: Javadoc) {
+//    source = android.sourceSets.main.java.srcDirs
+//    classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
+//    classpath += configurations.javadocDependencies
+//}
+//
+//task javaDocsJar(type: Jar, dependsOn: javaDocs) {
+//    classifier = 'javadoc'
+//    from javaDocs.destinationDir
+//}
 
 task sourcesJar(type: Jar) {
     classifier = 'sources'
@@ -64,16 +64,9 @@ uploadArchives {
     }
 }
 
-task generateBintrayJson {
-    def template = new File("bintray_template.json").text
-    File configFileText = new File("bintray.json")
-    configFileText.createNewFile()
-    configFileText.write(template.replace('[version]', version))
-}
-
 artifacts {
     archives sourcesJar
-    archives javaDocsJar
+//    archives javaDocsJar
 }
 
 dependencies {
@@ -81,6 +74,5 @@ dependencies {
     testCompile 'junit:junit:4.12'
     compile 'com.android.support:appcompat-v7:23.3.0'
 
-    compile project(':commonutils')
-    compile project(':tasksutils')
+    compile 'net.maxsmr:tasksutils:1.0'
 }

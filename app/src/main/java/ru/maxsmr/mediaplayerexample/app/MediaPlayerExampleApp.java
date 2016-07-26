@@ -2,14 +2,14 @@ package ru.maxsmr.mediaplayerexample.app;
 
 import android.app.Application;
 
+import net.maxsmr.mediaplayercontroller.facades.MediaPlayerFacade;
+import net.maxsmr.mediaplayercontroller.facades.PlaylistManagerFacade;
+import net.maxsmr.mediaplayercontroller.playlist.PlaylistItem;
+
 import org.apache.log4j.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import ru.maxsmr.mediaplayercontroller.facades.MediaPlayerFacade;
-import ru.maxsmr.mediaplayercontroller.facades.PlaylistManagerFacade;
-import ru.maxsmr.mediaplayercontroller.playlist.PlaylistItem;
-import ru.maxsmr.mediaplayercontroller.playlist.PlaylistManager;
 import ru.maxsmr.mediaplayerexample.app.logger.ConfigureLog4J;
 import ru.maxsmr.mediaplayerexample.player.MediaPlayerFactory;
 
