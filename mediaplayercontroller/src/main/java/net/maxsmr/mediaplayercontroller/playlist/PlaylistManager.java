@@ -1,17 +1,23 @@
 package net.maxsmr.mediaplayercontroller.playlist;
 
 import android.content.ContentResolver;
-import android.database.Observable;
+import android.content.res.AssetFileDescriptor;
 import android.net.Uri;
+import android.os.Looper;
 import android.support.annotation.CallSuper;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.text.TextUtils;
 
-import net.maxsmr.commonutils.android.SynchronizedObservable;
+import net.maxsmr.commonutils.android.media.MetadataRetriever;
 import net.maxsmr.commonutils.data.CompareUtils;
 import net.maxsmr.commonutils.data.FileHelper;
+import net.maxsmr.commonutils.data.Observable;
+import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
 import net.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
+import net.maxsmr.mediaplayercontroller.playlist.item.AbsPlaylistItem;
+import net.maxsmr.mediaplayercontroller.playlist.item.DescriptorPlaylistItem;
+import net.maxsmr.mediaplayercontroller.playlist.item.UriPlaylistItem;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,105 +27,136 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ScheduledFuture;
 
 import javax.net.ssl.HttpsURLConnection;
 
-public class PlaylistManager<T extends PlaylistItem> {
+public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsPlaylistItem> {
 
     private static final Logger logger = LoggerFactory.getLogger(PlaylistManager.class);
 
-    public static final PlayMode DEFAULT_PLAY_MODE = PlayMode.AUDIO;
-
     public final static int NO_POSITION = -1;
 
-    public static final String[] DEFAULT_ACCEPTABLE_FILE_MIME_TYPES_PARTS = new String[]{"audio", "video"};
-
-    private final Set<String> acceptableFileMimeTypesParts = new HashSet<>();
+    /**
+     * empty -> accept all
+     */
+    private final Set<String> mAcceptableFileMimeTypePrefixes = new HashSet<>();
 
     {
-        for (String defPart : DEFAULT_ACCEPTABLE_FILE_MIME_TYPES_PARTS) {
-            synchronized (acceptableFileMimeTypesParts) {
-                acceptableFileMimeTypesParts.add(defPart);
+        synchronized (mAcceptableFileMimeTypePrefixes) {
+            for (BaseMediaPlayerController.PlayMode m : BaseMediaPlayerController.PlayMode.values()) {
+                mAcceptableFileMimeTypePrefixes.addAll(m.getMimeTypeParts());
             }
         }
     }
 
-    public void addAcceptableFileMimeTypeParts(String... parts) {
-        synchronized (acceptableFileMimeTypesParts) {
+    public void addAcceptableFileMimeTypePrefixes(String... prefixes) {
+        synchronized (mAcceptableFileMimeTypePrefixes) {
+            if (prefixes != null) {
+                Collections.addAll(mAcceptableFileMimeTypePrefixes, prefixes);
+            }
+        }
+    }
+
+    public void removeAcceptableFileMimeTypePrefixes(String... parts) {
+        synchronized (mAcceptableFileMimeTypePrefixes) {
             if (parts != null) {
                 for (String part : parts) {
-                    acceptableFileMimeTypesParts.add(part);
+                    mAcceptableFileMimeTypePrefixes.remove(part);
                 }
             }
         }
     }
 
-    public void removeAcceptableFileMimeTypeParts(String... parts) {
-        synchronized (acceptableFileMimeTypesParts) {
-            if (parts != null) {
-                for (String part : parts) {
-                    acceptableFileMimeTypesParts.remove(part);
-                }
-            }
+    public void clearAcceptableFileMimeTypePrefixes() {
+        synchronized (mAcceptableFileMimeTypePrefixes) {
+            mAcceptableFileMimeTypePrefixes.clear();
         }
     }
 
-    public void ignoreAcceptableFileMimeTypeParts() {
-        synchronized (acceptableFileMimeTypesParts) {
-            acceptableFileMimeTypesParts.clear();
-        }
-    }
-
-    protected boolean isFileMimeTypeValid(@Nullable String mimeType) { // , @NonNull Set<String> acceptableFileMimeTypesParts
-//        acceptableFileMimeTypesParts = new LinkedHashSet<>(acceptableFileMimeTypesParts);
-        if (acceptableFileMimeTypesParts.isEmpty()) {
+    protected boolean isFileMimeTypeValid(@Nullable String mimeType) {
+        if (mAcceptableFileMimeTypePrefixes.isEmpty()) {
             return true;
         }
-        for (String part : acceptableFileMimeTypesParts) {
-            if (mimeType != null && mimeType.contains(part)) {
+        for (String part : mAcceptableFileMimeTypePrefixes) {
+            if (mimeType != null && mimeType.toLowerCase().startsWith(part)) {
                 return true;
             }
         }
         return false;
     }
 
+    protected boolean isTrackValid(@Nullable T item) {
+        boolean isValid = false;
+        if (item != null) {
+            if (item instanceof UriPlaylistItem) {
+                isValid = isTrackValid(((UriPlaylistItem) item).uri);
+            } else if (item instanceof DescriptorPlaylistItem) {
+                isValid = isTrackValid(((DescriptorPlaylistItem) item).descriptor);
+            } else {
+                throw new UnsupportedOperationException("incorrect item class: " + item.getClass());
+            }
+        }
+        return isValid && isTrackPlayModeSupported(item);
+    }
+
+    protected boolean isTrackPlayModeSupported(@Nullable T item) {
+        checkReleased();
+        return item != null && mPlayerController.isPlayModeSupported(item.playMode);
+    }
+
     /**
      * @param uriString may be path (if file) or full uri
      */
     protected boolean isTrackValid(@Nullable String uriString) {
+        checkReleased();
         if (!TextUtils.isEmpty(uriString)) {
             Uri uri = Uri.parse(uriString);
-            boolean isFile = TextUtils.isEmpty(uri.getScheme()) || uri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_FILE);
-            if (isFile) {
-                return FileHelper.isFileCorrect(new File(uri.getPath())) && isFileMimeTypeValid(HttpsURLConnection.guessContentTypeFromName(uriString));
-            } else
-                return uri.getScheme() != null && (uri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_CONTENT)
-                        || uri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_ANDROID_RESOURCE)
-                        || uri.getScheme().equalsIgnoreCase("http")
-                        || uri.getScheme().equalsIgnoreCase("https"));
+            if (uri.isHierarchical()) {
+                boolean isFile = TextUtils.isEmpty(uri.getScheme()) || uri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_FILE);
+                if (isFile) {
+                    return !TextUtils.isEmpty(uri.getPath()) &&
+                            FileHelper.isFileCorrect(new File(uri.getPath())) &&
+                            isFileMimeTypeValid(HttpsURLConnection.guessContentTypeFromName(uriString));
+                } else
+                    return uri.getScheme() != null && (uri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_CONTENT)
+                            || uri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_ANDROID_RESOURCE)
+                            || uri.getScheme().equalsIgnoreCase("http")
+                            || uri.getScheme().equalsIgnoreCase("https"));
+            }
         }
         return false;
+    }
+
+    protected boolean isTrackValid(@Nullable AssetFileDescriptor fd) {
+        checkReleased();
+        return fd != null && fd.getLength() > 0;
     }
 
     /**
      * @return uri with "file" scheme if it was empty or null if uriString url is incorrect
      */
     @Nullable
-    protected String fixUrlScheme(@Nullable String uriString) {
+    protected String fixUrl(@Nullable String uriString) {
+        String newUri = uriString;
         if (uriString != null && isTrackValid(uriString)) {
             Uri uri = Uri.parse(uriString);
             if (TextUtils.isEmpty(uri.getScheme())) {
-                return uri.buildUpon().scheme(ContentResolver.SCHEME_FILE).build().toString();
+                newUri = uri.buildUpon().scheme(ContentResolver.SCHEME_FILE).build().toString();
             } else {
-                return uriString;
+                newUri = uri.toString();
             }
+//            try {
+//                newUri = URLEncoder.encode(newUri, "utf-8");
+//            } catch (UnsupportedEncodingException e) {
+//                e.printStackTrace();
+//            }
         }
-        return null;
+        return newUri;
     }
 
     @NonNull
@@ -129,7 +166,8 @@ public class PlaylistManager<T extends PlaylistItem> {
             Iterator<T> it = tracks.iterator();
             while (it.hasNext()) {
                 T track = it.next();
-                if (track != null && !isTrackValid(track.track)) {
+                if (!isTrackValid(track)) {
+                    logger.error("track " + track + " is not valid");
                     incorrectTracks.add(track);
                     it.remove();
                 }
@@ -139,26 +177,31 @@ public class PlaylistManager<T extends PlaylistItem> {
     }
 
 
-    public PlaylistManager(MediaPlayerController playerController, Class<T> itemClass) {
-        if (playerController == null) {
-            throw new NullPointerException("playerController is null");
-        }
-        if (itemClass == null) {
-            throw new NullPointerException("itemClass is null");
-        }
-        this.mPlayerController = playerController;
-        this.mItemClass = itemClass;
-        this.init();
+    public PlaylistManager(@NonNull C playerController, @NonNull Class<T> itemClass) {
+        mPlayerController = playerController;
+        mItemClass = itemClass;
+        init();
     }
 
     private final Class<T> mItemClass;
 
+    @SuppressWarnings("unchecked")
+    public Class<C> getPlayerClass() {
+        return (Class<C>) mPlayerController.getClass();
+    }
+
+    public Class<T> getItemClass() {
+        return mItemClass;
+    }
+
     private boolean mReleased = false;
 
-    private final MediaPlayerController mPlayerController;
+    private C mPlayerController;
 
-    @NonNull
-    private PlayMode mPlayMode = DEFAULT_PLAY_MODE;
+    private ScheduledFuture<?> mTrackResetFuture;
+
+//    @NonNull
+//    private PlayMode mPlayMode = DEFAULT_PLAY_MODE;
 
     private boolean mLoopPlaylist;
 
@@ -172,6 +215,8 @@ public class PlaylistManager<T extends PlaylistItem> {
     @NonNull
     private final ArrayList<T> mTracks = new ArrayList<>();
 
+    private final OnActiveTrackChangedObservable<T> mActiveTrackChangedObservable = new OnActiveTrackChangedObservable<>();
+
     private final OnTracksSetObservable<T> mTracksSetObservable = new OnTracksSetObservable<>();
 
     private final OnTrackAddedObservable<T> mTrackAddedObservable = new OnTrackAddedObservable<>();
@@ -182,192 +227,447 @@ public class PlaylistManager<T extends PlaylistItem> {
 
     private final OnTracksClearedObservable mTracksClearedObservable = new OnTracksClearedObservable();
 
-    private void init() {
+    private final Runnable mTrackResetRunnable = new Runnable() {
+        @Override
+        public void run() {
+            logger.debug("mTrackResetRunnable :: run()");
+            synchronized (mTracks) {
+                checkReleased();
+                if (mPlayerController != null && !isTracksEmpty()) {
+                    mPlayerController.postOnMediaHandler(new Runnable() {
+                        @Override
+                        public void run() {
+                            logger.debug("timeouted, moving to next...");
+                            mMediaControllerCallbacks.onCompletion(false);
+                        }
+                    });
+                }
+            }
+        }
+    };
 
+    private void checkReleased() {
         if (mReleased) {
             throw new IllegalStateException(PlaylistManager.class.getSimpleName() + " was released");
         }
+    }
+
+    private void init() {
+
+        checkReleased();
 
         resetTrack();
         mPlayerController.getStateChangedObservable().registerObserver(mMediaControllerCallbacks);
         mPlayerController.getCompletionObservable().registerObserver(mMediaControllerCallbacks);
+        mPlayerController.getErrorObservable().registerObserver(mMediaControllerCallbacks);
     }
 
     public void release() {
 
-        if (mReleased) {
-            throw new IllegalStateException(PlaylistManager.class.getSimpleName() + " was already released");
-        }
+        checkReleased();
 
         clearTracks();
         mPlayerController.getStateChangedObservable().unregisterObserver(mMediaControllerCallbacks);
         mPlayerController.getCompletionObservable().unregisterObserver(mMediaControllerCallbacks);
+        mPlayerController.getErrorObservable().unregisterObserver(mMediaControllerCallbacks);
+
+        mPlayerController = null;
 
         mReleased = true;
     }
 
-    public Class<T> getItemClass() {
-        return mItemClass;
-    }
-
     @NonNull
-    public MediaPlayerController getPlayerController() {
+    public BaseMediaPlayerController getPlayerController() {
+        checkReleased();
         return mPlayerController;
     }
 
-    public PlayMode getPlayMode() {
-        return mPlayMode;
+    @NonNull
+    public Looper getMediaLooper() {
+        checkReleased();
+        return mPlayerController.getMediaLooper();
     }
 
-    /**
-     * tracks will be cleared if different
-     */
-    public void setPlayMode(@NonNull PlayMode playMode) {
-        if (playMode != mPlayMode) {
-            clearTracks();
-            mPlayMode = playMode;
+    @NonNull
+    public BaseMediaPlayerController.State getCurrentState() {
+        checkReleased();
+        return mPlayerController.getCurrentState();
+    }
+
+    @NonNull
+    public BaseMediaPlayerController.State getTargetState() {
+        checkReleased();
+        return mPlayerController.getTargetState();
+    }
+
+//    public PlayMode getPlayMode() {
+//        return mPlayMode;
+//    }
+//
+//    /**
+//     * tracks will be cleared if different
+//     */
+//    public void setPlayMode(@NonNull PlayMode playMode) {
+//        if (playMode != mPlayMode) {
+//            clearTracks();
+//            mPlayMode = playMode;
+//        }
+//    }
+
+    public boolean isPlaylistLooping() {
+        synchronized (mTracks) {
+            checkReleased();
+            return mLoopPlaylist;
         }
     }
 
-    public boolean isPlaylistLooping() {
-        return mLoopPlaylist;
-    }
-
     public void enableLoopPlaylist(boolean enable) {
-        mLoopPlaylist = enable;
+        synchronized (mTracks) {
+            checkReleased();
+            mLoopPlaylist = enable;
+        }
     }
 
     public void toggleLoopPlaylist() {
-        mLoopPlaylist = !mLoopPlaylist;
+        synchronized (mTracks) {
+            checkReleased();
+            mLoopPlaylist = !mLoopPlaylist;
+        }
     }
 
     public boolean isPlaying() {
-        return isInPlaybackState() && mPlayerController.isPlaying();
+        synchronized (mTracks) {
+            checkReleased();
+            return isInPlaybackState() && mPlayerController.isPlaying();
+        }
     }
 
     public boolean isPreparing() {
-        return mCurrentTrackIndex != NO_POSITION && mPlayerController.isPreparing();
+        synchronized (mTracks) {
+            checkReleased();
+            return mCurrentTrackIndex != NO_POSITION && mPlayerController.isPreparing();
+        }
     }
 
     public boolean isInPlaybackState() {
-        return mCurrentTrackIndex != NO_POSITION && mPlayerController.isInPlaybackState();
+        synchronized (mTracks) {
+            checkReleased();
+            return mCurrentTrackIndex != NO_POSITION && mPlayerController.isInPlaybackState();
+        }
+    }
+
+    @Nullable
+    public AssetFileDescriptor getCurrentTrackDescriptor() {
+        synchronized (mTracks) {
+            return mPlayerController.getContentAssetFileDescriptor();
+        }
     }
 
     @Nullable
     public Uri getCurrentTrackUri() {
-        final Uri resourceUri;
-        if (mPlayerController.isAudioSpecified() && mPlayerController.getAudioUri() != null) {
-            resourceUri = mPlayerController.getAudioUri();
-        } else if (mPlayerController.isVideoSpecified() && mPlayerController.getVideoUri() != null) {
-            resourceUri = mPlayerController.getVideoUri();
-        } else {
-            resourceUri = null;
+        synchronized (mTracks) {
+            checkReleased();
+            final Uri resourceUri = mPlayerController.getContentUri();
+            return resourceUri != null ? Uri.parse(fixUrl(resourceUri.toString())) : null;
         }
-        return resourceUri != null ? Uri.parse(fixUrlScheme(resourceUri.toString())) : null;
     }
 
     @Nullable
     public String getCurrentTrackPath() {
+        checkReleased();
         Uri trackUri = getCurrentTrackUri();
         return trackUri != null ? trackUri.getPath() : null;
     }
 
+    public boolean hasCurrentTrack() {
+        synchronized (mTracks) {
+            checkReleased();
+            return mCurrentTrackIndex != NO_POSITION;
+        }
+    }
+
     public int getCurrentTrackIndex() {
-        return mCurrentTrackIndex;
+        synchronized (mTracks) {
+            checkReleased();
+            return mCurrentTrackIndex;
+        }
     }
 
     @Nullable
     public T getCurrentTrack() {
-        return mCurrentTrackIndex != NO_POSITION ? getTrack(mCurrentTrackIndex) : null;
+        synchronized (mTracks) {
+            return hasCurrentTrack() ? getTrack(mCurrentTrackIndex) : null;
+        }
     }
 
-    public void playTrack(T track) {
+    public void prepareTrack(@NonNull T track) {
+        logger.debug("prepareTrack(), track=" + track);
+        synchronized (mTracks) {
+            prepareTrack(indexOf(track));
+        }
+    }
+
+    public void prepareTrack(int at) throws IndexOutOfBoundsException {
+        logger.debug("prepareTrack(), at=" + at + " / count=" + getTracksCount());
+        synchronized (mTracks) {
+            if (!isTracksEmpty()) {
+                T previous = getCurrentTrack();
+                prepareTrackInternal(getTrack(mCurrentTrackIndex = at));
+                mActiveTrackChangedObservable.dispatchPrepare(getCurrentTrack(), previous);
+            }
+        }
+    }
+
+    public void prepareFirstTrack() {
+        logger.debug("prepareFirstTrack()");
+        synchronized (mTracks) {
+            if (!isTracksEmpty()) {
+                prepareTrack(0);
+            }
+        }
+    }
+
+    public void prepareLastTrack() {
+        logger.debug("prepareLastTrack()");
+        synchronized (mTracks) {
+            if (!isTracksEmpty()) {
+                prepareTrack(getTracksCount() - 1);
+            }
+        }
+    }
+
+    public void playTrack(@NonNull T track) {
         logger.debug("playTrack(), track=" + track);
-        playTrack(indexOf(track));
+        synchronized (mTracks) {
+            playTrack(indexOf(track));
+        }
     }
 
     public void playTrack(int at) throws IndexOutOfBoundsException {
         logger.debug("playTrack(), at=" + at + " / count=" + getTracksCount());
-        if (!isTracksEmpty()) {
-            playTrackInternal(getTrack(mCurrentTrackIndex = at));
+        synchronized (mTracks) {
+            if (!isTracksEmpty()) {
+                playTrackInternal(getTrack(mCurrentTrackIndex = at));
+            }
         }
     }
 
     public void playFirstTrack() {
         logger.debug("playFirstTrack()");
-        playTrack(0);
-    }
-
-    public void playLastTrack() {
-        logger.debug("playLastTrack()");
-        playTrack(getTracksCount() - 1);
-    }
-
-    public void playNextTrack() {
-        logger.debug("playNextTrack()");
-        if (!isTracksEmpty()) {
-            if (mCurrentTrackIndex < getTracksCount() - 1) {
-                playTrack(mCurrentTrackIndex + 1);
-            } else {
-                if (mLoopPlaylist) {
-                    logger.debug("loop is enabled, playing from start...");
-                    playFirstTrack();
-                } else {
-                    logger.debug("loop is disabled, resetting...");
-                    resetTrack();
-                }
-            }
-        }
-    }
-
-    public void playPreviousTrack() {
-        logger.debug("playPreviousTrack()");
-        if (!isTracksEmpty()) {
-            if (mCurrentTrackIndex > 0) {
-                playTrack(mCurrentTrackIndex - 1);
-            } else {
+        synchronized (mTracks) {
+            if (!isTracksEmpty()) {
                 playTrack(0);
             }
         }
     }
 
-    private void playTrackInternal(T track) {
-        logger.debug("playTrackInternal(), track=" + track);
+    public void playLastTrack() {
+        logger.debug("playLastTrack()");
+        synchronized (mTracks) {
+            playTrack(getTracksCount() - 1);
+        }
+    }
 
-        if (mReleased) {
-            throw new IllegalStateException(PlaylistManager.class.getSimpleName() + " was released");
+    public void playPreviousTrack() {
+        logger.debug("playPreviousTrack()");
+        synchronized (mTracks) {
+            if (!isTracksEmpty()) {
+                if (mCurrentTrackIndex > 0) {
+                    playTrack(mCurrentTrackIndex - 1);
+                } else {
+                    playTrack(0);
+                }
+            }
+        }
+    }
+
+    public void playNextTrack() {
+        logger.debug("playNextTrack()");
+        synchronized (mTracks) {
+            if (!isTracksEmpty()) {
+                if (mCurrentTrackIndex < getTracksCount() - 1) {
+                    if (mCurrentTrackIndex == NO_POSITION) {
+                        playFirstTrack();
+                    } else if (mCurrentTrackIndex > NO_POSITION) {
+                        playTrack(mCurrentTrackIndex + 1);
+                    } else {
+                        throw new IllegalStateException("incorrect current track index: " + mCurrentTrackIndex);
+                    }
+                } else {
+                    if (mLoopPlaylist) {
+                        logger.debug("loop is enabled, playing from start...");
+                        playFirstTrack();
+                    } else {
+                        logger.debug("loop is disabled, resetting...");
+                        resetTrack();
+                    }
+                }
+            }
+        }
+    }
+
+    public void preparePreviousTrack() {
+        logger.debug("preparePreviousTrack()");
+        synchronized (mTracks) {
+            if (!isTracksEmpty()) {
+                if (mCurrentTrackIndex > 0) {
+                    prepareTrack(mCurrentTrackIndex - 1);
+                } else {
+                    prepareTrack(0);
+                }
+            }
+        }
+    }
+
+    public void prepareNextTrack() {
+        logger.debug("prepareNextTrack()");
+        synchronized (mTracks) {
+            if (!isTracksEmpty()) {
+                if (mCurrentTrackIndex < getTracksCount() - 1) {
+                    if (mCurrentTrackIndex == NO_POSITION) {
+                        prepareFirstTrack();
+                    } else if (mCurrentTrackIndex > NO_POSITION) {
+                        prepareTrack(mCurrentTrackIndex + 1);
+                    } else {
+                        throw new IllegalStateException("incorrect current track index: " + mCurrentTrackIndex);
+                    }
+                } else {
+                    if (mLoopPlaylist) {
+                        logger.debug("loop is enabled, playing from start...");
+                        prepareFirstTrack();
+                    } else {
+                        logger.debug("loop is disabled, resetting...");
+                        resetTrack();
+                    }
+                }
+            }
+        }
+    }
+
+    public void previousTrack() {
+        logger.debug("previousTrack()");
+        synchronized (mTracks) {
+            if (!isTracksEmpty()) {
+                if (mPlayerController.isPlaying()) {
+                    playPreviousTrack();
+                } else {
+                    preparePreviousTrack();
+                }
+            }
+        }
+    }
+
+    public void nextTrack() {
+        logger.debug("nextTrack()");
+        synchronized (mTracks) {
+            if (!isTracksEmpty()) {
+                if (mPlayerController.isPlaying()) {
+                    playNextTrack();
+                } else {
+                    prepareNextTrack();
+                }
+            }
+        }
+    }
+
+    private void setTrackInternal(@NonNull T track) {
+
+        checkReleased();
+
+        cancelResetFuture();
+
+//        mPlayerController.clearContent();
+
+        if (track instanceof UriPlaylistItem) {
+            mPlayerController.setContentUri(track.playMode, Uri.parse(fixUrl(((UriPlaylistItem) track).uri)));
+        } else if (track instanceof DescriptorPlaylistItem) {
+            mPlayerController.setContentFd(track.playMode, ((DescriptorPlaylistItem) track).descriptor);
+        } else {
+            throw new RuntimeException("unknown track class: " + track.getClass());
         }
 
-        if (track == null) {
-            throw new NullPointerException("track is null");
-        }
+        mPlayerController.setLooping(track.isLooping);
+    }
 
-        switch (mPlayMode) {
-            case AUDIO:
-                mPlayerController.setAudioPath(fixUrlScheme(track.track));
-                break;
-            case VIDEO:
-                mPlayerController.setVideoPath(fixUrlScheme(track.track));
-                break;
-            default:
-                throw new IllegalArgumentException("unknown playMode: " + mPlayMode);
-        }
-
-        mPlayerController.start();
+    private void prepareTrackInternal(@NonNull T track) {
+        logger.debug("prepareTrackInternal(), track=" + track);
+        T previous = getCurrentTrack();
+        setTrackInternal(track);
         mPlayerController.resume();
+        boolean schedule = false;
+        if (track.duration != AbsPlaylistItem.DURATION_NOT_SPECIFIED) {
+            schedule = !mLoopPlaylist || getTracksCount() > 1;
+            if (track.playMode != BaseMediaPlayerController.PlayMode.NONE && !track.playMode.isInfiniteMode) {
+                if (track instanceof UriPlaylistItem) {
+                    Uri uri = !TextUtils.isEmpty(((UriPlaylistItem) track).uri) ? Uri.parse(fixUrl(((UriPlaylistItem) track).uri)) : null;
+                    if (uri != null && CompareUtils.stringsEqual(uri.getScheme(), ContentResolver.SCHEME_FILE, true) && !TextUtils.isEmpty(uri.getPath())) {
+                        long actualDuration = MetadataRetriever.extractMediaDuration(new File(uri.getPath()));
+                        schedule = actualDuration <= 0 || ((UriPlaylistItem) track).duration <= actualDuration - 1000;
+                    }
+                } else if (track instanceof DescriptorPlaylistItem) {
+                    AssetFileDescriptor fd = ((DescriptorPlaylistItem) track).descriptor;
+                    long actualDuration = MetadataRetriever.extractMediaDuration(fd.getFileDescriptor());
+                    schedule = actualDuration <= 0 || ((DescriptorPlaylistItem) track).duration <= actualDuration - 1000;
+                }
+            }
+        }
+        if (schedule) {
+            logger.debug("scheduling reset callback (play timeout) after " + track.duration + " ms");
+            mTrackResetFuture = mPlayerController.scheduleOnExecutor(mTrackResetRunnable, track.duration);
+        }
+        mActiveTrackChangedObservable.dispatchPrepare(getCurrentTrack(), previous);
+    }
+
+    private void playTrackInternal(@NonNull T track) {
+        logger.debug("playTrackInternal(), track=" + track);
+        T previous = getCurrentTrack();
+        prepareTrackInternal(track);
+        mPlayerController.start();
+        mActiveTrackChangedObservable.dispatchPlay(getCurrentTrack(), previous);
+    }
+
+    private void cancelResetFuture() {
+        if (mTrackResetFuture != null) {
+            if (!mTrackResetFuture.isCancelled() && !mTrackResetFuture.isDone()) {
+                logger.debug("cancelling reset callback (play timeout)...");
+                mTrackResetFuture.cancel(true);
+            }
+            mTrackResetFuture = null;
+        }
     }
 
     public void resetTrack() {
         logger.debug("resetTrack()");
+        synchronized (mTracks) {
+            checkReleased();
 
-        if (mReleased) {
-            throw new IllegalStateException(PlaylistManager.class.getSimpleName() + " was released");
+            cancelResetFuture();
+
+            if (mCurrentTrackIndex != NO_POSITION) {
+
+                T previous = getCurrentTrack();
+                mCurrentTrackIndex = NO_POSITION;
+
+                if (!mPlayerController.isReleased()) {
+                    mPlayerController.stop();
+                    if (mPlayerController.getContentUri() != null) {
+                        mPlayerController.setContentUri(BaseMediaPlayerController.PlayMode.NONE, null);
+                    }
+                    if (mPlayerController.getContentAssetFileDescriptor() != null) {
+                        mPlayerController.setContentFd(BaseMediaPlayerController.PlayMode.NONE, null);
+                    }
+                }
+
+                if (previous != null) {
+                    mActiveTrackChangedObservable.dispatchReset(previous);
+                }
+            }
         }
+    }
 
-        mCurrentTrackIndex = NO_POSITION;
-        mPlayerController.stop();
-        mPlayerController.setAudioUri(null);
-        mPlayerController.setVideoUri(null);
+    @NonNull
+    public Observable<OnActiveTrackChangedListener<T>> getActiveTrackChangedObservable() {
+        return mActiveTrackChangedObservable;
     }
 
     @NonNull
@@ -422,15 +722,16 @@ public class PlaylistManager<T extends PlaylistItem> {
     }
 
     @NonNull
-    public final ArrayList<T> getTracks() {
+    public final List<T> getTracks() {
         synchronized (mTracks) {
-            return new ArrayList<>(mTracks);
+            return Collections.unmodifiableList(mTracks);
         }
     }
 
     @NonNull
     public final T getTrack(int at) throws IndexOutOfBoundsException {
         synchronized (mTracks) {
+            checkReleased();
             rangeCheck(at);
             return mTracks.get(at);
         }
@@ -439,13 +740,14 @@ public class PlaylistManager<T extends PlaylistItem> {
     public final int indexOf(String trackUrl) {
         synchronized (mTracks) {
             if (!isTracksEmpty()) {
-                trackUrl = isTrackValid(trackUrl) ? fixUrlScheme(trackUrl) : trackUrl;
+                trackUrl = fixUrl(trackUrl);
                 for (int i = 0; i < mTracks.size(); i++) {
                     T curTrack = mTracks.get(i);
                     if (curTrack != null) {
-                        String curTrackUrl = isTrackValid(curTrack.track) ? fixUrlScheme(curTrack.track) : curTrack.track;
-                        if (CompareUtils.stringsEqual(trackUrl, curTrackUrl, true)) {
-                            return i;
+                        if (isTrackValid(curTrack) && curTrack instanceof UriPlaylistItem) {
+                            if (CompareUtils.stringsEqual(trackUrl, fixUrl(((UriPlaylistItem) curTrack).uri), true)) {
+                                return i;
+                            }
                         }
                     }
                 }
@@ -457,13 +759,50 @@ public class PlaylistManager<T extends PlaylistItem> {
     public final int lastIndexOf(String trackUrl) {
         synchronized (mTracks) {
             if (!isTracksEmpty()) {
-                trackUrl = isTrackValid(trackUrl) ? fixUrlScheme(trackUrl) : trackUrl;
+                trackUrl = isTrackValid(trackUrl) ? fixUrl(trackUrl) : trackUrl;
                 for (int i = mTracks.size() - 1; i >= 0; i--) {
                     T curTrack = mTracks.get(i);
                     if (curTrack != null) {
-                        String curTrackUrl = isTrackValid(curTrack.track) ? fixUrlScheme(curTrack.track) : curTrack.track;
-                        if (CompareUtils.stringsEqual(trackUrl, curTrackUrl, true)) {
-                            return i;
+                        if (isTrackValid(curTrack) && curTrack instanceof UriPlaylistItem) {
+                            if (CompareUtils.stringsEqual(trackUrl, fixUrl(((UriPlaylistItem) curTrack).uri), true)) {
+                                return i;
+                            }
+                        }
+                    }
+                }
+            }
+            return NO_POSITION;
+        }
+    }
+
+    public final int indexOf(AssetFileDescriptor descriptor) {
+        synchronized (mTracks) {
+            if (!isTracksEmpty()) {
+                for (int i = 0; i < mTracks.size(); i++) {
+                    T curTrack = mTracks.get(i);
+                    if (curTrack != null) {
+                        if (isTrackValid(curTrack) && curTrack instanceof DescriptorPlaylistItem) {
+                            if (CompareUtils.objectsEqual(descriptor, ((DescriptorPlaylistItem) curTrack).descriptor)) {
+                                return i;
+                            }
+                        }
+                    }
+                }
+            }
+            return NO_POSITION;
+        }
+    }
+
+    public final int lastIndexOf(AssetFileDescriptor descriptor) {
+        synchronized (mTracks) {
+            if (!isTracksEmpty()) {
+                for (int i = mTracks.size() - 1; i >= 0; i--) {
+                    T curTrack = mTracks.get(i);
+                    if (curTrack != null) {
+                        if (isTrackValid(curTrack) && curTrack instanceof DescriptorPlaylistItem) {
+                            if (CompareUtils.objectsEqual(descriptor, ((DescriptorPlaylistItem) curTrack).descriptor)) {
+                                return i;
+                            }
                         }
                     }
                 }
@@ -484,29 +823,36 @@ public class PlaylistManager<T extends PlaylistItem> {
         }
     }
 
-    public void sort(@NonNull Comparator<? super T> comparator) {
+    public <O extends AbsPlaylistItem.ItemSortOption> void sort(@NonNull AbsPlaylistItem.ItemComparator<O, ? super T> comparator) {
         synchronized (mTracks) {
+            T previousTrack = getCurrentTrack();
             Collections.sort(mTracks, comparator);
+            mCurrentTrackIndex = indexOf(previousTrack);
         }
     }
+
+    // TODO randomizer
 
     /**
      * @param tracks null for reset playlist
      */
-    public final void setTracks(@Nullable Collection<T> tracks) {
+    public final boolean setTracks(@Nullable Collection<T> tracks) {
         synchronized (mTracks) {
+            boolean result = true;
             clearTracks();
             if (tracks != null) {
                 tracks = new ArrayList<>(tracks);
                 List<T> incorrect = filterIncorrectTracks(tracks);
                 if (!incorrect.isEmpty()) {
                     onTracksSetFailed(incorrect);
+                    result = false;
                 }
                 if (!tracks.isEmpty()) {
                     this.mTracks.addAll(tracks);
                     onTracksSet();
                 }
             }
+            return result;
         }
     }
 
@@ -519,11 +865,13 @@ public class PlaylistManager<T extends PlaylistItem> {
 
     @CallSuper
     protected void onTracksSet() {
+        logger.debug("onTracksSet()");
         mTracksSetObservable.dispatchSet(getTracks());
     }
 
     @CallSuper
     protected void onTracksSetFailed(@NonNull List<T> incorrectTracks) {
+        logger.error("onTracksSetFailed(), incorrectTracks=" + incorrectTracks);
         mTracksSetObservable.dispatchNotSet(incorrectTracks);
     }
 
@@ -540,13 +888,14 @@ public class PlaylistManager<T extends PlaylistItem> {
 
     @CallSuper
     protected void onTracksCleared(int oldCount) {
+        logger.debug("onTracksCleared(), oldCount=" + oldCount);
         mTracksClearedObservable.dispatchCleared(oldCount);
     }
 
     public final boolean addTrack(int to, T track) throws IndexOutOfBoundsException {
         synchronized (mTracks) {
             rangeCheckForAdd(to);
-            if (track != null && isTrackValid(track.track)) {
+            if (isTrackValid(track)) {
                 if (to == mCurrentTrackIndex) {
                     mCurrentTrackIndex++;
                 }
@@ -571,6 +920,7 @@ public class PlaylistManager<T extends PlaylistItem> {
 
     @CallSuper
     protected void onTrackAdded(int addedPosition, T track) {
+        logger.debug("onTrackAdded(), addedPosition=" + addedPosition + ", track=" + track);
         mTrackAddedObservable.dispatchAdded(addedPosition, track);
     }
 
@@ -579,30 +929,33 @@ public class PlaylistManager<T extends PlaylistItem> {
         mTrackAddedObservable.dispatchAddFailed(addedPosition, track);
     }
 
-    public final void setTrack(int in, T track) {
+    public final boolean setTrack(int in, T track) {
         synchronized (mTracks) {
             rangeCheck(in);
-            if (track != null && isTrackValid(track.track)) {
+            if (isTrackValid(track)) {
                 mTracks.set(in, track);
-                T currentTrack = getCurrentTrack();
-                if (in == mCurrentTrackIndex && currentTrack != null && !CompareUtils.stringsEqual(currentTrack.track, track.track, true)) {
+                if (in == mCurrentTrackIndex) {
                     resetTrack();
                     playTrack(in);
                 }
                 onTrackSet(in, track);
+                return true;
             } else {
                 onTrackSetFailed(in, track);
+                return false;
             }
         }
     }
 
     @CallSuper
     protected void onTrackSet(int setPosition, T track) {
+        logger.debug("onTrackSet(), setPosition=" + setPosition + ", track=" + track);
         mTrackSetObservable.dispatchSet(setPosition, track);
     }
 
     @CallSuper
     protected void onTrackSetFailed(int setPosition, T track) {
+        logger.error("onTrackSetFailed(), setPosition=" + setPosition + ", track=" + track);
         mTrackSetObservable.dispatchSetFailed(setPosition, track);
     }
 
@@ -619,6 +972,9 @@ public class PlaylistManager<T extends PlaylistItem> {
             T removedTrack = getTrack(from);
             mTracks.remove(from);
             onTrackRemoved(from, removedTrack);
+            if (isTracksEmpty()) {
+                onTracksCleared(1);
+            }
             return removedTrack;
         }
     }
@@ -644,36 +1000,68 @@ public class PlaylistManager<T extends PlaylistItem> {
 
     @CallSuper
     protected void onTrackRemoved(int removedPosition, T track) {
+        logger.debug("onTrackRemoved(), removedPosition=" + removedPosition + ", track=" + track);
         mTrackRemovedObservable.dispatchRemoved(removedPosition, track);
     }
 
-    private class MediaControllerCallbacks implements MediaPlayerController.OnStateChangedListener, MediaPlayerController.OnCompletionListener {
+    @Override
+    public String toString() {
+        return "PlaylistManager{" +
+                "mAcceptableFileMimeTypePrefixes=" + mAcceptableFileMimeTypePrefixes +
+                ", mItemClass=" + mItemClass +
+                ", mReleased=" + mReleased +
+                ", mPlayerController=" + mPlayerController +
+                ", mLoopPlaylist=" + mLoopPlaylist +
+                ", mCurrentTrackIndex=" + mCurrentTrackIndex +
+                ", mMediaControllerCallbacks=" + mMediaControllerCallbacks +
+                ", mTracks=" + mTracks +
+                ", mActiveTrackChangedObservable=" + mActiveTrackChangedObservable +
+                ", mTracksSetObservable=" + mTracksSetObservable +
+                ", mTrackAddedObservable=" + mTrackAddedObservable +
+                ", mTrackSetObservable=" + mTrackSetObservable +
+                ", mTrackRemovedObservable=" + mTrackRemovedObservable +
+                ", mTracksClearedObservable=" + mTracksClearedObservable +
+                '}';
+    }
+
+    private class MediaControllerCallbacks implements BaseMediaPlayerController.OnStateChangedListener, BaseMediaPlayerController.OnCompletionListener, BaseMediaPlayerController.OnErrorListener {
 
         @Override
-        public void onCurrentStateChanged(@NonNull MediaPlayerController.State currentState, @NonNull MediaPlayerController.State previousState) {
-            if (!isTracksEmpty()) {
+        public void onBeforeOpenDataSource() {
 
-                boolean contains = false;
+        }
 
-                Uri currentTrackUri = getCurrentTrackUri();
-                String currentTrackUriString = currentTrackUri != null ? currentTrackUri.toString() : null;
+        @Override
+        public void onCurrentStateChanged(@NonNull BaseMediaPlayerController.State currentState, @NonNull BaseMediaPlayerController.State previousState) {
+            synchronized (mTracks) {
+                if (!isTracksEmpty()) {
 
-                if (!TextUtils.isEmpty(currentTrackUriString)) {
-                    contains = indexOf(currentTrackUriString) != NO_POSITION;
-                }
-//                else {
-//                    contains = false;
-//                    throw new IllegalStateException(MediaPlayerController.class.getName() + " is in playback state, but resource uri is empty");
-//                }
+                    // по сути бесполезная хня: index по текущей uri может найтись, когда играет совсем другой трек, пусть даже из этого же листа
 
-                if (mPlayerController.isInPlaybackState() || mPlayerController.isPreparing()) {
-                    if (!contains) {
-                        throw new IllegalStateException("track " + currentTrackUriString + " not found in playlist!");
+                    boolean contains = false;
+
+                    Uri currentTrackUri = getCurrentTrackUri();
+                    String currentTrackUriString = currentTrackUri != null ? currentTrackUri.toString() : null;
+                    AssetFileDescriptor currentFd = getCurrentTrackDescriptor();
+
+                    if (!TextUtils.isEmpty(currentTrackUriString)) {
+                        contains = indexOf(currentTrackUriString) != NO_POSITION;
+                    } else {
+                        if (currentFd != null) {
+                            contains = indexOf(currentFd) != NO_POSITION;
+                        }
                     }
-                } else {
-                    if (!contains) {
-                        mCurrentTrackIndex = NO_POSITION;
+
+                    if (mPlayerController.isInPlaybackState() || mPlayerController.isPreparing()) {
+                        if (!contains) {
+                            logger.error("track (uri: " + currentTrackUriString + " / descriptor: " + currentFd + ") not found in playlist!");
+                        }
                     }
+//                    else {
+//                        if (!contains) {
+//                            mCurrentTrackIndex = NO_POSITION;
+//                        }
+//                    }
                 }
             }
         }
@@ -684,32 +1072,79 @@ public class PlaylistManager<T extends PlaylistItem> {
         }
 
         @Override
-        public void onCompletion(boolean isLooping) {
-            if (!isLooping) {
-                playNextTrack();
+        public void onCompletion(final boolean isLooping) {
+            logger.debug("onCompletion(), isLooping=" + isLooping);
+            synchronized (mTracks) {
+
+                if (!isLooping) {
+                    cancelResetFuture();
+                }
+
+                if (hasCurrentTrack()) {
+                    mActiveTrackChangedObservable.dispatchCompleted(getCurrentTrack());
+                }
+
+                if (!isLooping) {
+                    if (getTargetState() == BaseMediaPlayerController.State.PLAYING) {
+                        playNextTrack();
+                    } else {
+                        nextTrack();
+                    }
+                }
+            }
+        }
+
+        @Override
+        public void onError(@NonNull MediaError error) {
+            logger.error("onError(), error=" + error + ", current track: " + getCurrentTrackIndex() + " / " + getCurrentTrack());
+            synchronized (mTracks) {
+
+                cancelResetFuture();
+
+                if (hasCurrentTrack()) {
+                    mActiveTrackChangedObservable.dispatchError(error, getCurrentTrack());
+                }
+
+                if (getTargetState() == BaseMediaPlayerController.State.PLAYING) {
+                    playNextTrack();
+                } else {
+                    nextTrack();
+                }
             }
         }
     }
 
-    public interface OnTracksSetListener<T extends PlaylistItem> {
+    public interface OnActiveTrackChangedListener<T extends AbsPlaylistItem> {
+        void onPrepare(@NonNull T track, @Nullable T previous);
+
+        void onPlay(@NonNull T current, @Nullable T previous);
+
+        void onReset(@NonNull T previous);
+
+        void onCompleted(@NonNull T current);
+
+        void onError(@NonNull BaseMediaPlayerController.OnErrorListener.MediaError error, @NonNull T current);
+    }
+
+    public interface OnTracksSetListener<T extends AbsPlaylistItem> {
         void onTracksSet(@NonNull List<T> newTracks);
 
         void onTracksNotSet(@NonNull List<T> incorrectTracks);
     }
 
-    public interface OnTrackAddedListener<T extends PlaylistItem> {
+    public interface OnTrackAddedListener<T extends AbsPlaylistItem> {
         void onTrackAdded(int to, T trackUrl);
 
         void onTrackAddFailed(int to, T trackUrl);
     }
 
-    public interface OnTrackSetListener<T extends PlaylistItem> {
+    public interface OnTrackSetListener<T extends AbsPlaylistItem> {
         void onTrackSet(int in, T track);
 
         void onTrackSetFailed(int in, T track);
     }
 
-    public interface OnTrackRemovedListener<T extends PlaylistItem> {
+    public interface OnTrackRemovedListener<T extends AbsPlaylistItem> {
         void onTrackRemoved(int from, T track);
     }
 
@@ -717,7 +1152,51 @@ public class PlaylistManager<T extends PlaylistItem> {
         void onTracksCleared(int oldCount);
     }
 
-    private static class OnTracksSetObservable<T extends PlaylistItem> extends SynchronizedObservable<OnTracksSetListener<T>> {
+    private static class OnActiveTrackChangedObservable<T extends AbsPlaylistItem> extends Observable<OnActiveTrackChangedListener<T>> {
+
+        private void dispatchPrepare(T current, T previous) {
+            synchronized (mObservers) {
+                for (OnActiveTrackChangedListener<T> l : copyOfObservers()) {
+                    l.onPrepare(current, previous);
+                }
+            }
+        }
+
+        private void dispatchPlay(T current, T previous) {
+            synchronized (mObservers) {
+                for (OnActiveTrackChangedListener<T> l : copyOfObservers()) {
+                    l.onPlay(current, previous);
+                }
+            }
+        }
+
+        private void dispatchReset(T previous) {
+            synchronized (mObservers) {
+                for (OnActiveTrackChangedListener<T> l : copyOfObservers()) {
+                    l.onReset(previous);
+                }
+            }
+        }
+
+        private void dispatchCompleted(T current) {
+            synchronized (mObservers) {
+                for (OnActiveTrackChangedListener<T> l : copyOfObservers()) {
+                    l.onCompleted(current);
+                }
+            }
+        }
+
+        private void dispatchError(BaseMediaPlayerController.OnErrorListener.MediaError error, T current) {
+            synchronized (mObservers) {
+                for (OnActiveTrackChangedListener<T> l : copyOfObservers()) {
+                    l.onError(error, current);
+                }
+            }
+        }
+    }
+
+
+    private static class OnTracksSetObservable<T extends AbsPlaylistItem> extends Observable<OnTracksSetListener<T>> {
 
         private void dispatchSet(@NonNull List<T> newTracks) {
             synchronized (mObservers) {
@@ -738,7 +1217,7 @@ public class PlaylistManager<T extends PlaylistItem> {
         }
     }
 
-    private static class OnTrackAddedObservable<T extends PlaylistItem> extends SynchronizedObservable<OnTrackAddedListener<T>> {
+    private static class OnTrackAddedObservable<T extends AbsPlaylistItem> extends Observable<OnTrackAddedListener<T>> {
 
         private void dispatchAdded(int to, T track) {
             synchronized (mObservers) {
@@ -757,7 +1236,7 @@ public class PlaylistManager<T extends PlaylistItem> {
         }
     }
 
-    private static class OnTrackSetObservable<T extends PlaylistItem> extends SynchronizedObservable<OnTrackSetListener<T>> {
+    private static class OnTrackSetObservable<T extends AbsPlaylistItem> extends Observable<OnTrackSetListener<T>> {
 
         private void dispatchSet(int in, T track) {
             synchronized (mObservers) {
@@ -776,7 +1255,7 @@ public class PlaylistManager<T extends PlaylistItem> {
         }
     }
 
-    private static class OnTrackRemovedObservable<T extends PlaylistItem> extends SynchronizedObservable<OnTrackRemovedListener<T>> {
+    private static class OnTrackRemovedObservable<T extends AbsPlaylistItem> extends Observable<OnTrackRemovedListener<T>> {
 
         private void dispatchRemoved(int from, T track) {
             synchronized (mObservers) {
@@ -788,7 +1267,7 @@ public class PlaylistManager<T extends PlaylistItem> {
         }
     }
 
-    private static class OnTracksClearedObservable extends SynchronizedObservable<OnTracksClearedListener> {
+    private static class OnTracksClearedObservable extends Observable<OnTracksClearedListener> {
 
         private void dispatchCleared(int oldCount) {
             synchronized (mObservers) {
@@ -798,10 +1277,6 @@ public class PlaylistManager<T extends PlaylistItem> {
 
             }
         }
-    }
-
-    public enum PlayMode {
-        AUDIO, VIDEO
     }
 
 }

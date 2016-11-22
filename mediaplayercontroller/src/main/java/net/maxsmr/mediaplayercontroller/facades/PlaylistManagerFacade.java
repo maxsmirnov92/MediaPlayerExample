@@ -6,9 +6,10 @@ import android.support.annotation.Nullable;
 import android.util.Pair;
 
 import net.maxsmr.commonutils.data.CompareUtils;
+import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
 import net.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
-import net.maxsmr.mediaplayercontroller.playlist.PlaylistItem;
 import net.maxsmr.mediaplayercontroller.playlist.PlaylistManager;
+import net.maxsmr.mediaplayercontroller.playlist.item.AbsPlaylistItem;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -29,7 +30,7 @@ public class PlaylistManagerFacade {
 
     public static void releaseInstance() {
         if (sInstance != null) {
-            for (PlaylistManager<?> manager : sInstance.mCached.values()) {
+            for (PlaylistManager<?, ?> manager : sInstance.mCached.values()) {
                 manager.release();
             }
             sInstance.mCached.clear();
@@ -37,14 +38,14 @@ public class PlaylistManagerFacade {
     }
 
     @NonNull
-    private LinkedHashMap<String, PlaylistManager<?>> mCached = new LinkedHashMap<>();
+    private LinkedHashMap<String, PlaylistManager<?, ?>> mCached = new LinkedHashMap<>();
 
     @NonNull
-    public <T extends PlaylistItem> PlaylistManager<T> create(String alias, MediaPlayerController mpc, Class<T> clazz) {
-        PlaylistManager<T> manager = get(alias);
+    public <C extends BaseMediaPlayerController, I extends AbsPlaylistItem> PlaylistManager<C, I> create(String alias, C mpc, Class<I> itemClass) {
+        PlaylistManager<C, I> manager = get(alias);
         if (manager == null) {
-            manager = new PlaylistManager<>(mpc, clazz);
-            manager.ignoreAcceptableFileMimeTypeParts();
+            manager = new PlaylistManager<>(mpc, itemClass);
+            manager.clearAcceptableFileMimeTypePrefixes();
         }
         mCached.put(alias, manager);
         return manager;
@@ -52,13 +53,13 @@ public class PlaylistManagerFacade {
 
     @SuppressWarnings("unchecked")
     @Nullable
-    public <T extends PlaylistItem> PlaylistManager<T> get(String alias) throws ClassCastException {
-        return (PlaylistManager<T>) mCached.get(alias);
+    public <C extends BaseMediaPlayerController, I extends AbsPlaylistItem> PlaylistManager<C, I> get(String alias) throws ClassCastException {
+        return (PlaylistManager<C, I>) mCached.get(alias);
     }
 
     @Nullable
-    public PlaylistManager<?> remove(String alias) {
-        PlaylistManager<?> manager = mCached.remove(alias);
+    public PlaylistManager<?, ?> remove(String alias) {
+        PlaylistManager<?, ?> manager = mCached.remove(alias);
         if (manager != null) {
             manager.release();
         }
@@ -70,8 +71,8 @@ public class PlaylistManagerFacade {
      * @return null if no managers in "playback" state
      */
     @Nullable
-    private Pair<String, ? extends PlaylistManager<?>> findFirstManagerInPlaybackState() {
-        for (Map.Entry<String, PlaylistManager<?>> entry : mCached.entrySet()) {
+    private Pair<String, ? extends PlaylistManager<?, ?>> findFirstManagerInPlaybackState() {
+        for (Map.Entry<String, PlaylistManager<?, ?>> entry : mCached.entrySet()) {
             if (entry.getValue().isInPlaybackState()) {
                 return new Pair<>(entry.getKey(), entry.getValue());
             }
@@ -80,8 +81,8 @@ public class PlaylistManagerFacade {
     }
 
     @Nullable
-    private Pair<String, ? extends PlaylistManager<?>> findManagerInPlaybackStateByAlias(String alias) {
-        for (Map.Entry<String, PlaylistManager<?>> entry : mCached.entrySet()) {
+    private Pair<String, ? extends PlaylistManager<?, ?>> findManagerInPlaybackStateByAlias(String alias) {
+        for (Map.Entry<String, PlaylistManager<?, ?>> entry : mCached.entrySet()) {
             if (CompareUtils.stringsEqual(entry.getKey(), alias, true) && entry.getValue().isInPlaybackState()) {
                 return new Pair<>(entry.getKey(), entry.getValue());
             }
@@ -94,8 +95,8 @@ public class PlaylistManagerFacade {
      * @return null if no managers in specified state
      */
     @Nullable
-    private Pair<String, ? extends PlaylistManager<?>> findFirstManagerInState(@NonNull MediaPlayerController.State state) {
-        for (Map.Entry<String, PlaylistManager<?>> entry : mCached.entrySet()) {
+    private Pair<String, ? extends PlaylistManager<?, ?>> findFirstManagerInState(@NonNull MediaPlayerController.State state) {
+        for (Map.Entry<String, PlaylistManager<?, ?>> entry : mCached.entrySet()) {
             if (entry.getValue().getPlayerController().getCurrentState() == state) {
                 return new Pair<>(entry.getKey(), entry.getValue());
             }
@@ -104,8 +105,8 @@ public class PlaylistManagerFacade {
     }
 
     @Nullable
-    private Pair<String, ? extends PlaylistManager<?>> findFirstManagerInStateByAlias(@NonNull MediaPlayerController.State state, String alias) {
-        for (Map.Entry<String, PlaylistManager<?>> entry : mCached.entrySet()) {
+    private Pair<String, ? extends PlaylistManager<?, ?>> findFirstManagerInStateByAlias(@NonNull MediaPlayerController.State state, String alias) {
+        for (Map.Entry<String, PlaylistManager<?, ?>> entry : mCached.entrySet()) {
             if (CompareUtils.stringsEqual(entry.getKey(), alias, true) && entry.getValue().getPlayerController().getCurrentState() == state) {
                 return new Pair<>(entry.getKey(), entry.getValue());
             }
@@ -114,14 +115,14 @@ public class PlaylistManagerFacade {
     }
 
     private void clearAllTracks() {
-        for (PlaylistManager<?> manager : mCached.values()) {
+        for (PlaylistManager<?, ?> manager : mCached.values()) {
             manager.clearTracks();
         }
     }
 
     public void clearAllTracksByAlias(String... aliases) {
         if (aliases != null) {
-            for (Map.Entry<String, PlaylistManager<?>> entry : mCached.entrySet()) {
+            for (Map.Entry<String, PlaylistManager<?, ?>> entry : mCached.entrySet()) {
                  if (Arrays.binarySearch(aliases, entry.getKey()) > -1) {
                     entry.getValue().clearTracks();
                 }

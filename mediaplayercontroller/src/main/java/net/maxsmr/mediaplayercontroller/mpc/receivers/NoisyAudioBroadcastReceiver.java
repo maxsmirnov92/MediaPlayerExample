@@ -4,9 +4,10 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.database.Observable;
 import android.media.AudioManager;
 import android.support.annotation.NonNull;
+
+import net.maxsmr.commonutils.data.Observable;
 
 public class NoisyAudioBroadcastReceiver extends BroadcastReceiver {
 

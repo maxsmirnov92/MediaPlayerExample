@@ -4,7 +4,7 @@ import android.app.Application;
 
 import net.maxsmr.mediaplayercontroller.facades.MediaPlayerFacade;
 import net.maxsmr.mediaplayercontroller.facades.PlaylistManagerFacade;
-import net.maxsmr.mediaplayercontroller.playlist.PlaylistItem;
+import net.maxsmr.mediaplayercontroller.playlist.item.UriPlaylistItem;
 
 import org.apache.log4j.Level;
 import org.slf4j.Logger;
@@ -36,7 +36,7 @@ public class MediaPlayerExampleApp extends Application {
         MediaPlayerFactory.initInstance(this);
 
         MediaPlayerFacade.getInstance().create(PLAYER_ALIAS);
-        PlaylistManagerFacade.getInstance().create(PLAYER_ALIAS, MediaPlayerFacade.getInstance().get(PLAYER_ALIAS), PlaylistItem.class);
+        PlaylistManagerFacade.getInstance().create(PLAYER_ALIAS, MediaPlayerFacade.getInstance().get(PLAYER_ALIAS), UriPlaylistItem.class);
 //        PlaylistManagerFacade.getInstance().get(PLAYER_ALIAS).addAcceptableFileMimeTypeParts("application/ogg");
     }
 

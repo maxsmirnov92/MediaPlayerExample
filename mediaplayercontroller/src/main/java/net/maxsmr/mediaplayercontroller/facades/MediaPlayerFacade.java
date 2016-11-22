@@ -4,9 +4,9 @@ import android.content.Context;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 
-import java.util.LinkedHashMap;
-
 import net.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
+
+import java.util.LinkedHashMap;
 
 public final class MediaPlayerFacade {
 

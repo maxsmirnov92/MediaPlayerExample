@@ -12,7 +12,7 @@ import net.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ScrobblerHelper {
+public final class ScrobblerHelper {
 
     private static final Logger logger = LoggerFactory.getLogger(ScrobblerHelper.class);
 
@@ -195,6 +195,11 @@ public class ScrobblerHelper {
                 notifyScrobblerStateChanged(MediaPlayerController.State.IDLE, mLastState, null, 0);
                 notifyScrobblerStateChanged(MediaPlayerController.State.PLAYING, mLastState, mMpc.getCurrentTrackMetatada(), mMpc.getCurrentPosition());
             }
+        }
+
+        @Override
+        public void onBeforeOpenDataSource() {
+
         }
 
         @Override

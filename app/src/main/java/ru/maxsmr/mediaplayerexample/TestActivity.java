@@ -44,9 +44,11 @@ import net.maxsmr.commonutils.android.gui.GuiUtils;
 import net.maxsmr.commonutils.data.FileHelper;
 import net.maxsmr.mediaplayercontroller.ScrobblerHelper;
 import net.maxsmr.mediaplayercontroller.facades.PlaylistManagerFacade;
+import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
 import net.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
-import net.maxsmr.mediaplayercontroller.playlist.PlaylistItem;
 import net.maxsmr.mediaplayercontroller.playlist.PlaylistManager;
+import net.maxsmr.mediaplayercontroller.playlist.item.AbsPlaylistItem;
+import net.maxsmr.mediaplayercontroller.playlist.item.UriPlaylistItem;
 
 import org.ngweb.android.api.filedialog.FileDialog;
 import org.slf4j.Logger;
@@ -57,17 +59,19 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import ru.maxsmr.mediaplayerexample.app.MediaPlayerExampleApp;
 import ru.maxsmr.mediaplayerexample.player.MediaPlayerFactory;
 
-public class TestActivity extends AppCompatActivity implements SurfaceHolder.Callback, MediaPlayerController.OnStateChangedListener, MediaPlayerController.OnErrorListener, MediaPlayerController.OnVideoSizeChangedListener, MediaPlayerController.OnPlaybackTimeUpdateTimeListener, PlaylistManager.OnTracksSetListener<PlaylistItem>, SeekBar.OnSeekBarChangeListener {
+public class TestActivity extends AppCompatActivity implements SurfaceHolder.Callback, MediaPlayerController.OnStateChangedListener, MediaPlayerController.OnErrorListener, MediaPlayerController.OnVideoSizeChangedListener, MediaPlayerController.OnPlaybackTimeUpdateTimeListener, PlaylistManager.OnTracksSetListener<UriPlaylistItem>, SeekBar.OnSeekBarChangeListener {
 
     private static final Logger logger = LoggerFactory.getLogger(TestActivity.class);
 
     private MediaPlayerController mediaPlayerController;
-    private PlaylistManager<PlaylistItem> playlistManager;
+    private PlaylistManager<MediaPlayerController, UriPlaylistItem> playlistManager;
     private ScrobblerHelper scrobblerHelper;
 
     private Spinner navigationSpinner;
@@ -378,6 +382,11 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     }
 
     @Override
+    public void onBeforeOpenDataSource() {
+
+    }
+
+    @Override
     public void onCurrentStateChanged(@NonNull final MediaPlayerController.State currentState, @NonNull MediaPlayerController.State previousState) {
         logger.info("onCurrentStateChanged(), currentState=" + currentState + ", previousState=" + previousState);
         runOnUiThread(new Runnable() {
@@ -409,12 +418,6 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     @Override
     public void onTargetStateChanged(@NonNull MediaPlayerController.State targetState) {
         logger.info("onTargetStateChanged(), targetState=" + targetState);
-    }
-
-    @Override
-    public void onError(int what, int extra) {
-        logger.error("onError(), what=" + what + ", extra=" + extra);
-        processError();
     }
 
     private void invalidateByCurrentState() {
@@ -465,10 +468,10 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
                         if (directory != null && FileHelper.isDirExists(directory.getAbsolutePath())) {
                             lastSelectedDirectory = directory;
 
-                            List<File> folderFiles = FileHelper.getFiles(directory, false, null);
-                            List<PlaylistItem>  playlistItems = new ArrayList<>();
+                            Set<File> folderFiles = FileHelper.getFiles(Collections.singleton(directory), FileHelper.GetMode.FILES, true, null, null);
+                            List<UriPlaylistItem> playlistItems = new ArrayList<>();
                             for (File f : folderFiles) {
-                                playlistItems.add(new PlaylistItem(f.getAbsolutePath()));
+                                playlistItems.add(new UriPlaylistItem(BaseMediaPlayerController.PlayMode.VIDEO, UriPlaylistItem.DURATION_NOT_SPECIFIED, isActionLoopingChecked(menu), f.getAbsolutePath()));
                             }
                             playlistManager.setTracks(playlistItems);
                             playlistManager.playFirstTrack();
@@ -489,9 +492,9 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
                         logger.debug("mimeType=" + mimeType);
 
                         if (mimeType.contains("audio")) {
-                            mediaPlayerController.setAudioFile(file);
+                            mediaPlayerController.setContentUri(BaseMediaPlayerController.PlayMode.AUDIO, Uri.fromFile(file));
                         } else if (mimeType.contains("video")) {
-                            mediaPlayerController.setVideoFile(file);
+                            mediaPlayerController.setContentUri(BaseMediaPlayerController.PlayMode.VIDEO, Uri.fromFile(file));
                         }
 
                         if (mediaPlayerController.isAudioSpecified() || mediaPlayerController.isVideoSpecified()) {
@@ -571,10 +574,10 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
                             playlistManager.clearTracks();
 
                             if (!isVideo) {
-                                mediaPlayerController.setAudioPath(url);
+                                mediaPlayerController.setContentUri(BaseMediaPlayerController.PlayMode.AUDIO, Uri.parse(url));
 //                            surfaceView.setVisibility(View.GONE);
                             } else {
-                                mediaPlayerController.setVideoPath(url);
+                                mediaPlayerController.setContentUri(BaseMediaPlayerController.PlayMode.VIDEO, Uri.parse(url));
 //                            surfaceView.setVisibility(View.VISIBLE);
                             }
                             mediaPlayerController.start();
@@ -584,8 +587,11 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
 //                            if (isVideo != (playlistManager.getPlayMode() == PlaylistManager.PlayMode.VIDEO)) {
 //                                playlistManager.clearTracks();
 //                            }
-                            playlistManager.setPlayMode(isVideo ? PlaylistManager.PlayMode.VIDEO : PlaylistManager.PlayMode.AUDIO);
-                            playlistManager.addTrack(new PlaylistItem(url));
+                            playlistManager.addTrack(new UriPlaylistItem(isVideo ? BaseMediaPlayerController.PlayMode.VIDEO : BaseMediaPlayerController.PlayMode.AUDIO,
+                                    AbsPlaylistItem.DURATION_NOT_SPECIFIED,
+                                    isActionLoopingChecked(menu),
+                                    url
+                            ));
                             playlistManager.playLastTrack();
                         }
                     }
@@ -631,7 +637,6 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     }
 
 
-
     @Override
     public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
         if (fromUser) {
@@ -654,13 +659,20 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
         trackBar.setProgress(position);
     }
 
+
     @Override
-    public void onTracksSet(@NonNull List<PlaylistItem> newTracks) {
+    public void onError(@NonNull MediaError error) {
+        logger.error("onError(), error=" + error);
+        processError();
+    }
+
+    @Override
+    public void onTracksSet(@NonNull List<UriPlaylistItem> newTracks) {
 
     }
 
     @Override
-    public void onTracksNotSet(@NonNull List<PlaylistItem> incorrectTracks) {
+    public void onTracksNotSet(@NonNull List<UriPlaylistItem> incorrectTracks) {
 
     }
 

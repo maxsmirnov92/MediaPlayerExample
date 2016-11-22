@@ -2,28 +2,43 @@ package net.maxsmr.mediaplayercontroller.mpc.receivers;
 
 
 import android.content.Context;
-import android.database.Observable;
 import android.media.AudioManager;
 import android.support.annotation.NonNull;
 
+import net.maxsmr.commonutils.data.Observable;
+
+import static android.media.AudioManager.AUDIOFOCUS_REQUEST_FAILED;
+
 public class AudioFocusChangeReceiver implements AudioManager.OnAudioFocusChangeListener {
+
+    private boolean isRequested = false;
 
     @NonNull
     private final OnAudioFocusChangedObservable audioFocusChangedObservable = new OnAudioFocusChangedObservable();
 
     @NonNull
-    public Observable<OnAudioFocusChangeListener> getAudioFocusChangeListener() {
+    public Observable<OnAudioFocusChangeListener> getAudioFocusChangeObservable() {
         return audioFocusChangedObservable;
     }
 
-    public void requestFocus(@NonNull Context context) {
+    public boolean requestFocus(@NonNull Context context) {
+        if (isRequested) {
+            abandonFocus(context);
+        }
         AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-        audioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+        return isRequested = audioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN) != AUDIOFOCUS_REQUEST_FAILED;
     }
 
-    public void abandonFocus(@NonNull Context context) {
-        AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-        audioManager.abandonAudioFocus(this);
+    public boolean abandonFocus(@NonNull Context context) {
+        if (isRequested) {
+            AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+            try {
+                return audioManager.abandonAudioFocus(this) != AUDIOFOCUS_REQUEST_FAILED;
+            } finally {
+                isRequested = false;
+            }
+        }
+        return true;
     }
 
     @Override
@@ -36,23 +51,38 @@ public class AudioFocusChangeReceiver implements AudioManager.OnAudioFocusChange
         private void dispatchAudioFocusChanged(int focusChange) {
             switch (focusChange) {
                 case AudioManager.AUDIOFOCUS_GAIN:
-                    for (OnAudioFocusChangeListener l : mObservers) {
-                        l.onAudioFocusGain();
-                    }
-                    break;
-                case AudioManager.AUDIOFOCUS_LOSS:
-                    for (OnAudioFocusChangeListener l : mObservers) {
-                        l.onAudioFocusLoss();
+                    synchronized (mObservers) {
+                        for (OnAudioFocusChangeListener l : mObservers) {
+                            l.onAudioFocusGain();
+                        }
                     }
                     break;
                 case AudioManager.AUDIOFOCUS_GAIN_TRANSIENT:
-                    for (OnAudioFocusChangeListener l : mObservers) {
-                        l.onAudioFocusLossTransient();
+                    synchronized (mObservers) {
+                        for (OnAudioFocusChangeListener l : mObservers) {
+                            l.onAudioFocusGain();
+                        }
+                    }
+                    break;
+                case AudioManager.AUDIOFOCUS_LOSS:
+                    synchronized (mObservers) {
+                        for (OnAudioFocusChangeListener l : mObservers) {
+                            l.onAudioFocusLoss();
+                        }
+                    }
+                    break;
+                case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+                    synchronized (mObservers) {
+                        for (OnAudioFocusChangeListener l : mObservers) {
+                            l.onAudioFocusLossTransient();
+                        }
                     }
                     break;
                 case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
-                    for (OnAudioFocusChangeListener l : mObservers) {
-                        l.onAudioFocusLossTransientCanDuck();
+                    synchronized (mObservers) {
+                        for (OnAudioFocusChangeListener l : mObservers) {
+                            l.onAudioFocusLossTransientCanDuck();
+                        }
                     }
                     break;
             }
