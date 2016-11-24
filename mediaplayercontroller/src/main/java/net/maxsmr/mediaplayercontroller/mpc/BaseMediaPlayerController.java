@@ -105,6 +105,9 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     @Nullable
     protected AssetFileDescriptor mContentFileDescriptor;
 
+    @NonNull
+    protected PlayMode mLastModeToOpen = PlayMode.NONE;
+
     @Nullable
     protected Uri mLastContentUriToOpen = null;
 
@@ -680,6 +683,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         if (isContentSpecified()) {
             mLastContentUriToOpen = mContentUri != null? mContentUri : null;
             mLastAssetFileDescriptorToOpen = mContentFileDescriptor != null? mContentFileDescriptor : null;
+            mLastModeToOpen = mPlayMode;
             mStateChangedObservable.dispatchBeforeOpenDataSource();
         }
     }
@@ -750,12 +754,20 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
 
         boolean reopen = false;
 
-        if (mLastContentUriToOpen != null) {
-            if (!CompareUtils.objectsEqual(mLastContentUriToOpen, mContentUri)) {
-                reopen = true;
-            }
-        } else if (mLastAssetFileDescriptorToOpen != null) {
-            if (!CompareUtils.objectsEqual(mLastAssetFileDescriptorToOpen, mContentFileDescriptor)) {
+        if (mLastModeToOpen != PlayMode.NONE) {
+            if (mPlayMode == mLastModeToOpen) {
+                if (mLastContentUriToOpen != null) {
+                    if (!CompareUtils.objectsEqual(mLastContentUriToOpen, mContentUri)) {
+                        reopen = true;
+                    }
+                } else if (mLastAssetFileDescriptorToOpen != null) {
+                    if (!CompareUtils.objectsEqual(mLastAssetFileDescriptorToOpen, mContentFileDescriptor)) {
+                        reopen = true;
+                    }
+                } else {
+                    return false;
+                }
+            } else {
                 reopen = true;
             }
         } else {

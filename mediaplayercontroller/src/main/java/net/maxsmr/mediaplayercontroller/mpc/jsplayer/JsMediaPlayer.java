@@ -27,7 +27,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     protected final ScriptCallback.Executor mScriptExecutor;
 
     @NonNull
-    protected final PageLoadSuccessObservable pageLoadSuccessObservable = new PageLoadSuccessObservable();
+    protected final PageLoadSuccessObservable mPageLoadSuccessObservable = new PageLoadSuccessObservable();
 
     private final Runnable mResetRunnable = new Runnable() {
         @Override
@@ -68,8 +68,8 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     }
 
     @NonNull
-    public Observable<OnPageLoadSuccessListener> getPageLoadSuccessObservable() {
-        return pageLoadSuccessObservable;
+    public Observable<OnPageLoadSuccessListener> getmPageLoadSuccessObservable() {
+        return mPageLoadSuccessObservable;
     }
 
     private void checkUrlNotLoaded() {
@@ -120,10 +120,10 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
                                 mScheduleOpenDataSource = false;
                                 logger.debug("openDataSource() scheduled (after page loaded)");
                                 openDataSource();
-                                pageLoadSuccessObservable.dispatchPageLoadSuccess(loadedUrl, true);
+                                mPageLoadSuccessObservable.dispatchPageWithScriptsReady(loadedUrl, true);
                             } else {
                                 clearDataSource(false);
-                                pageLoadSuccessObservable.dispatchPageLoadSuccess(loadedUrl, false);
+                                mPageLoadSuccessObservable.dispatchPageWithScriptsReady(loadedUrl, false);
                             }
                         }
                     }
@@ -514,6 +514,8 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
         mScriptExecutor.execute("clearImage()");
         mScriptExecutor.execute("clearPage()");
         mLastContentUriToOpen = null;
+        mLastAssetFileDescriptorToOpen = null;
+        mLastModeToOpen = PlayMode.NONE;
         setCurrentState(State.IDLE);
         if (clearTargetState) {
             setTargetState(State.IDLE);
@@ -618,15 +620,15 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     public interface OnPageLoadSuccessListener {
 
         @MainThread
-        void onPageReady(String uri, boolean isOpenResourceScheduled);
+        void onPageWithScriptsReady(String uri, boolean isOpenResourceScheduled);
     }
 
     protected static class PageLoadSuccessObservable extends Observable<OnPageLoadSuccessListener> {
 
-        private void dispatchPageLoadSuccess(String uri, boolean isOpenResourceScheduled) {
+        private void dispatchPageWithScriptsReady(String uri, boolean isOpenResourceScheduled) {
             synchronized (mObservers) {
                 for (OnPageLoadSuccessListener l : copyOfObservers()) {
-                    l.onPageReady(uri, isOpenResourceScheduled);
+                    l.onPageWithScriptsReady(uri, isOpenResourceScheduled);
                 }
             }
         }

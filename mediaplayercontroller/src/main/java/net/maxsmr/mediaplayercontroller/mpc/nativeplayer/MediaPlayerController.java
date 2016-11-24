@@ -330,7 +330,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
                 String contentType = HttpURLConnection.guessContentTypeFromName(mContentUri.toString());
                 logger.info("uri content type: " + contentType);
 
-                if (mNoCheckMediaContentType || TextUtils.isEmpty(contentType)) {
+                if (!mNoCheckMediaContentType && TextUtils.isEmpty(contentType)) {
                     logger.error("empty uri content type");
                     onError(new MediaError(MediaError.PREPARE_EMPTY_CONTENT_TYPE, MediaError.UNKNOWN));
                     return;
@@ -556,6 +556,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
 
             mLastContentUriToOpen = null;
             mLastAssetFileDescriptorToOpen = null;
+            mLastModeToOpen = PlayMode.NONE;
 
             boolean result;
             final long startReleasingTime = System.currentTimeMillis();
