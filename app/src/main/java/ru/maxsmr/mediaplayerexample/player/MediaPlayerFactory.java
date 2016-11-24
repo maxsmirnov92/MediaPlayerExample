@@ -6,7 +6,7 @@ import android.support.annotation.Nullable;
 
 import java.util.LinkedHashMap;
 
-import net.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
+import net.maxsmr.mediaplayercontroller.mpc.nativeplayer.MediaPlayerController;
 
 public class MediaPlayerFactory {
 

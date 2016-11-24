@@ -7,7 +7,6 @@ import android.util.Pair;
 
 import net.maxsmr.commonutils.data.CompareUtils;
 import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
-import net.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
 import net.maxsmr.mediaplayercontroller.playlist.PlaylistManager;
 import net.maxsmr.mediaplayercontroller.playlist.item.AbsPlaylistItem;
 
@@ -15,7 +14,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class PlaylistManagerFacade {
+public final class PlaylistManagerFacade {
 
     private static PlaylistManagerFacade sInstance;
 
@@ -95,7 +94,7 @@ public class PlaylistManagerFacade {
      * @return null if no managers in specified state
      */
     @Nullable
-    private Pair<String, ? extends PlaylistManager<?, ?>> findFirstManagerInState(@NonNull MediaPlayerController.State state) {
+    private Pair<String, ? extends PlaylistManager<?, ?>> findFirstManagerInState(@NonNull BaseMediaPlayerController.State state) {
         for (Map.Entry<String, PlaylistManager<?, ?>> entry : mCached.entrySet()) {
             if (entry.getValue().getPlayerController().getCurrentState() == state) {
                 return new Pair<>(entry.getKey(), entry.getValue());
@@ -105,7 +104,7 @@ public class PlaylistManagerFacade {
     }
 
     @Nullable
-    private Pair<String, ? extends PlaylistManager<?, ?>> findFirstManagerInStateByAlias(@NonNull MediaPlayerController.State state, String alias) {
+    private Pair<String, ? extends PlaylistManager<?, ?>> findFirstManagerInStateByAlias(@NonNull BaseMediaPlayerController.State state, String alias) {
         for (Map.Entry<String, PlaylistManager<?, ?>> entry : mCached.entrySet()) {
             if (CompareUtils.stringsEqual(entry.getKey(), alias, true) && entry.getValue().getPlayerController().getCurrentState() == state) {
                 return new Pair<>(entry.getKey(), entry.getValue());

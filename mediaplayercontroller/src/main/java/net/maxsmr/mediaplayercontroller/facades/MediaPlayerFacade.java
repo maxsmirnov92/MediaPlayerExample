@@ -4,7 +4,7 @@ import android.content.Context;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 
-import net.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
+import net.maxsmr.mediaplayercontroller.mpc.nativeplayer.MediaPlayerController;
 
 import java.util.LinkedHashMap;
 

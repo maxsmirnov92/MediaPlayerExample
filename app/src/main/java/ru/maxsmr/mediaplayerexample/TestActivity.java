@@ -45,7 +45,7 @@ import net.maxsmr.commonutils.data.FileHelper;
 import net.maxsmr.mediaplayercontroller.ScrobblerHelper;
 import net.maxsmr.mediaplayercontroller.facades.PlaylistManagerFacade;
 import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
-import net.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
+import net.maxsmr.mediaplayercontroller.mpc.nativeplayer.MediaPlayerController;
 import net.maxsmr.mediaplayercontroller.playlist.PlaylistManager;
 import net.maxsmr.mediaplayercontroller.playlist.item.AbsPlaylistItem;
 import net.maxsmr.mediaplayercontroller.playlist.item.UriPlaylistItem;

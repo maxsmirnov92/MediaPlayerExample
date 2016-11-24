@@ -7,7 +7,7 @@ import android.support.annotation.Nullable;
 import android.text.TextUtils;
 
 import net.maxsmr.commonutils.android.media.MetadataRetriever;
-import net.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
+import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,26 +16,31 @@ public final class ScrobblerHelper {
 
     private static final Logger logger = LoggerFactory.getLogger(ScrobblerHelper.class);
 
-    public static ScrobblerHelper attach(@NonNull Context context, @NonNull MediaPlayerController mpc) {
+    public static ScrobblerHelper attach(@NonNull Context context, @NonNull BaseMediaPlayerController<?> mpc) {
+        logger.debug("attach(), mpc=" + mpc);
         return new ScrobblerHelper(context, mpc);
     }
 
-    private static boolean isScrobbleState(@NonNull MediaPlayerController.State state) {
-        return state == MediaPlayerController.State.IDLE || state == MediaPlayerController.State.PAUSED || state == MediaPlayerController.State.PLAYING;
+    private static boolean isScrobbleState(@NonNull BaseMediaPlayerController.State state) {
+        return state == BaseMediaPlayerController.State.IDLE || state == BaseMediaPlayerController.State.PAUSED || state == BaseMediaPlayerController.State.PLAYING;
     }
 
-    private ScrobblerHelper(@NonNull Context context, @NonNull MediaPlayerController mpc) {
+    private ScrobblerHelper(@NonNull Context context, @NonNull BaseMediaPlayerController<?> mpc) {
         mContext = context;
         mMpc = mpc;
         mMpc.getStateChangedObservable().registerObserver(mCallbacks);
         mMpc.getCompletionObservable().registerObserver(mCallbacks);
-        notifyScrobblerNonIdleStateChanged();
+        if (mMpc.getCurrentState() != BaseMediaPlayerController.State.RELEASED) {
+            notifyScrobblerIdleState();
+        } else {
+            detach();
+        }
     }
 
     @NonNull
     private final Context mContext;
 
-    private MediaPlayerController mMpc;
+    private BaseMediaPlayerController<?> mMpc;
 
     @NonNull
     private final MediaPlayerCallbacks mCallbacks = new MediaPlayerCallbacks();
@@ -43,7 +48,7 @@ public final class ScrobblerHelper {
     private boolean mScrobblingEnabled = true;
 
     @NonNull
-    private MediaPlayerController.State mLastState = MediaPlayerController.State.IDLE;
+    private BaseMediaPlayerController.State mLastState = BaseMediaPlayerController.State.IDLE;
 
     private MetadataRetriever.MediaMetadata mLastMetadata;
 
@@ -51,15 +56,15 @@ public final class ScrobblerHelper {
         return metadata != null && !TextUtils.isEmpty(metadata.artist) && !TextUtils.isEmpty(metadata.title) && metadata.durationMs > 0;
     }
 
-    private synchronized void notifyScrobblerStateChanged(@NonNull MediaPlayerController.State newState, @NonNull MediaPlayerController.State oldState, @Nullable MetadataRetriever.MediaMetadata metadata, long position) {
+    private synchronized void notifyScrobblerStateChanged(@NonNull BaseMediaPlayerController.State newState, @NonNull BaseMediaPlayerController.State oldState, @Nullable MetadataRetriever.MediaMetadata metadata, long position) {
         logger.debug("notifyScrobblerStateChanged(), newState=" + newState + ", oldState=" + oldState + ", metadata=" + metadata + ", position=" + position);
 
         if (mMpc == null) {
-            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " is not attached");
+            throw new IllegalStateException(BaseMediaPlayerController.class.getSimpleName() + " is not attached");
         }
 
-        if (newState == MediaPlayerController.State.RELEASED || oldState == MediaPlayerController.State.RELEASED) {
-            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was released");
+        if (newState == BaseMediaPlayerController.State.RELEASED || oldState == BaseMediaPlayerController.State.RELEASED) {
+            throw new IllegalStateException(BaseMediaPlayerController.class.getSimpleName() + " was released");
         }
 
         if (isScrobbleState(newState)) {
@@ -68,7 +73,7 @@ public final class ScrobblerHelper {
 
                 if (newState != mLastState) {
 
-                    if (newState != MediaPlayerController.State.IDLE) {
+                    if (newState != BaseMediaPlayerController.State.IDLE) {
 
                         if (checkMetadata(metadata)) {
 
@@ -77,22 +82,22 @@ public final class ScrobblerHelper {
                             switch (newState) {
 
                                 case PAUSED:
-                                    scrobbleIntent.setAction(BroadcastIntentStrings.ACTION_LASTFMAPI_PAUSERESUME);
+                                    scrobbleIntent.setAction(BroadcastIntentActions.ACTION_LASTFMAPI_PAUSERESUME);
                                     break;
 
                                 case PLAYING:
-                                    if (oldState == MediaPlayerController.State.PAUSED) {
-                                        scrobbleIntent.setAction(BroadcastIntentStrings.ACTION_LASTFMAPI_PAUSERESUME);
+                                    if (oldState == BaseMediaPlayerController.State.PAUSED) {
+                                        scrobbleIntent.setAction(BroadcastIntentActions.ACTION_LASTFMAPI_PAUSERESUME);
                                         if (position < 0 || position > metadata.durationMs) {
                                             throw new IllegalArgumentException("incorrect track position: " + position);
                                         }
-                                        scrobbleIntent.putExtra(BroadcastIntentStrings.EXTRA_POSITION, position);
+                                        scrobbleIntent.putExtra(BroadcastIntentExtras.EXTRA_POSITION, position);
                                     } else {
-                                        scrobbleIntent.setAction(BroadcastIntentStrings.ACTION_LASTFMAPI_METACHANGED);
-                                        scrobbleIntent.putExtra(BroadcastIntentStrings.EXTRA_TRACK, metadata.title);
-                                        scrobbleIntent.putExtra(BroadcastIntentStrings.EXTRA_ARTIST, metadata.artist);
-                                        scrobbleIntent.putExtra(BroadcastIntentStrings.EXTRA_ALBUM, metadata.album);
-                                        scrobbleIntent.putExtra(BroadcastIntentStrings.EXTRA_DURATION, metadata.durationMs);
+                                        scrobbleIntent.setAction(BroadcastIntentActions.ACTION_LASTFMAPI_METACHANGED);
+                                        scrobbleIntent.putExtra(BroadcastIntentExtras.EXTRA_TRACK, metadata.title);
+                                        scrobbleIntent.putExtra(BroadcastIntentExtras.EXTRA_ARTIST, metadata.artist);
+                                        scrobbleIntent.putExtra(BroadcastIntentExtras.EXTRA_ALBUM, metadata.album);
+                                        scrobbleIntent.putExtra(BroadcastIntentExtras.EXTRA_DURATION, metadata.durationMs);
                                     }
                                     break;
                             }
@@ -102,7 +107,7 @@ public final class ScrobblerHelper {
                         }
 
                     } else {
-                        mContext.sendBroadcast(new Intent(BroadcastIntentStrings.ACTION_LASTFMAPI_STOP));
+                        mContext.sendBroadcast(new Intent(BroadcastIntentActions.ACTION_LASTFMAPI_STOP));
                         mLastMetadata = null;
                     }
 
@@ -115,23 +120,23 @@ public final class ScrobblerHelper {
     private void notifyScrobblerNonIdleStateChanged() {
 
         if (mMpc == null) {
-            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " is not attached");
+            throw new IllegalStateException(BaseMediaPlayerController.class.getSimpleName() + " is not attached");
         }
 
-        MediaPlayerController.State currentState = mMpc.getCurrentState();
-        if (currentState != MediaPlayerController.State.IDLE) {
+        BaseMediaPlayerController.State currentState = mMpc.getCurrentState();
+        if (currentState != BaseMediaPlayerController.State.IDLE) {
             notifyScrobblerStateChanged(currentState, mLastState, mMpc.getCurrentTrackMetatada(), mMpc.getCurrentPosition());
         }
     }
 
     private void notifyScrobblerIdleState() {
-        notifyScrobblerStateChanged(MediaPlayerController.State.IDLE, mLastState, null, 0);
+        notifyScrobblerStateChanged(BaseMediaPlayerController.State.IDLE, mLastState, null, 0);
     }
 
     public void enableScrobbling() {
 
         if (mMpc == null) {
-            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " is not attached");
+            throw new IllegalStateException(BaseMediaPlayerController.class.getSimpleName() + " is not attached");
         }
 
         mScrobblingEnabled = true;
@@ -141,7 +146,7 @@ public final class ScrobblerHelper {
     public void disableScrobbling() {
 
         if (mMpc == null) {
-            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " is not attached");
+            throw new IllegalStateException(BaseMediaPlayerController.class.getSimpleName() + " is not attached");
         }
 
         if (mScrobblingEnabled) {
@@ -160,6 +165,7 @@ public final class ScrobblerHelper {
 
     /** must be called when done with scrobbling */
     public void detach() {
+        logger.debug("detach()");
         notifyScrobblerIdleState();
         disableScrobbling();
         mMpc.getStateChangedObservable().unregisterObserver(mCallbacks);
@@ -167,10 +173,14 @@ public final class ScrobblerHelper {
         mMpc = null;
     }
 
-    private interface BroadcastIntentStrings {
+    protected interface BroadcastIntentActions {
+
         String ACTION_LASTFMAPI_METACHANGED = "fm.last.android.metachanged";
         String ACTION_LASTFMAPI_PAUSERESUME = "fm.last.android.playbackpaused";
         String ACTION_LASTFMAPI_STOP = "fm.last.android.playbackcomplete";
+    }
+
+    protected interface BroadcastIntentExtras {
 
         String EXTRA_TRACK = "track";
         String EXTRA_ARTIST = "artist";
@@ -187,13 +197,13 @@ public final class ScrobblerHelper {
         String EXTRA_POSITION = "position";
     }
 
-    private class MediaPlayerCallbacks implements MediaPlayerController.OnStateChangedListener, MediaPlayerController.OnCompletionListener {
+    private class MediaPlayerCallbacks implements BaseMediaPlayerController.OnStateChangedListener, BaseMediaPlayerController.OnCompletionListener {
 
         @Override
         public void onCompletion(boolean isLooping) {
             if (isLooping) {
-                notifyScrobblerStateChanged(MediaPlayerController.State.IDLE, mLastState, null, 0);
-                notifyScrobblerStateChanged(MediaPlayerController.State.PLAYING, mLastState, mMpc.getCurrentTrackMetatada(), mMpc.getCurrentPosition());
+                notifyScrobblerStateChanged(BaseMediaPlayerController.State.IDLE, mLastState, null, 0);
+                notifyScrobblerStateChanged(BaseMediaPlayerController.State.PLAYING, mLastState, mMpc.getCurrentTrackMetatada(), mMpc.getCurrentPosition());
             }
         }
 
@@ -203,8 +213,8 @@ public final class ScrobblerHelper {
         }
 
         @Override
-        public void onCurrentStateChanged(@NonNull MediaPlayerController.State currentState, @NonNull MediaPlayerController.State previousState) {
-            if (currentState == MediaPlayerController.State.RELEASED) {
+        public void onCurrentStateChanged(@NonNull BaseMediaPlayerController.State currentState, @NonNull BaseMediaPlayerController.State previousState) {
+            if (currentState == BaseMediaPlayerController.State.RELEASED) {
                 detach();
             } else {
                 notifyScrobblerStateChanged(currentState, previousState, mMpc.getCurrentTrackMetatada(), mMpc.getCurrentPosition());
@@ -212,7 +222,7 @@ public final class ScrobblerHelper {
         }
 
         @Override
-        public void onTargetStateChanged(@NonNull MediaPlayerController.State targetState) {
+        public void onTargetStateChanged(@NonNull BaseMediaPlayerController.State targetState) {
 
         }
     }

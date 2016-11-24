@@ -26,6 +26,7 @@ import net.maxsmr.commonutils.android.media.MetadataRetriever;
 import net.maxsmr.commonutils.data.CompareUtils;
 import net.maxsmr.commonutils.data.FileHelper;
 import net.maxsmr.commonutils.data.Observable;
+import net.maxsmr.mediaplayercontroller.mpc.nativeplayer.MediaPlayerController;
 import net.maxsmr.mediaplayercontroller.mpc.receivers.AudioFocusChangeReceiver;
 import net.maxsmr.mediaplayercontroller.mpc.receivers.HeadsetPlugBroadcastReceiver;
 import net.maxsmr.mediaplayercontroller.mpc.receivers.NoisyAudioBroadcastReceiver;
@@ -96,11 +97,19 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     @NonNull
     protected PlayMode mPlayMode = PlayMode.NONE;
 
+    protected boolean mNoCheckMediaContentType;
+
     @Nullable
     protected Uri mContentUri;
 
     @Nullable
     protected AssetFileDescriptor mContentFileDescriptor;
+
+    @Nullable
+    protected Uri mLastContentUriToOpen = null;
+
+    @Nullable
+    protected AssetFileDescriptor mLastAssetFileDescriptorToOpen = null;
 
     @NonNull
     protected Map<String, String> mContentHeaders = new LinkedHashMap<>();
@@ -138,19 +147,17 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     @NonNull
     protected final OnStateChangedObservable mStateChangedObservable = new OnStateChangedObservable();
 
+    @NonNull
     protected final OnCompletionObservable mCompletionObservable = new OnCompletionObservable();
 
+    @NonNull
     protected final OnBufferingUpdateObservable mBufferingUpdateObservable = new OnBufferingUpdateObservable();
 
+    @NonNull
     protected final PlaybackTimeUpdateTimeObservable mPlaybackTimeUpdateTimeObservable = new PlaybackTimeUpdateTimeObservable();
 
     @NonNull
     protected final OnErrorObservable<E> mErrorObservable = new OnErrorObservable<>();
-
-    @NonNull
-    public Observable<OnErrorListener<E>> getErrorObservable() {
-        return mErrorObservable;
-    }
 
     @NonNull
     private final AudioFocusChangeReceiver.OnAudioFocusChangeListener mAudioFocusChangeListener = new AudioFocusChangeReceiver.OnAudioFocusChangeListener() {
@@ -380,6 +387,14 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         mVolumeRightWhenPrepared = right;
     }
 
+    public boolean isNoCheckMediaContentType() {
+        return mNoCheckMediaContentType;
+    }
+
+    public void setNoCheckMediaContentType(boolean toggle) {
+        mNoCheckMediaContentType = toggle;
+    }
+
     @Override
     public synchronized int getBufferPercentage() {
         return mCurrentBufferPercentage;
@@ -575,6 +590,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
 
     @CallSuper
     public synchronized void setLooping(boolean toggle) {
+        logger.debug("setLooping(), toggle=" + toggle);
         mLoopWhenPreparing = toggle;
     }
 
@@ -613,8 +629,14 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         return mBufferingUpdateObservable;
     }
 
+    @NonNull
     public Observable<OnPlaybackTimeUpdateTimeListener> getPlaybackTimeUpdateTimeObservable() {
         return mPlaybackTimeUpdateTimeObservable;
+    }
+
+    @NonNull
+    public Observable<OnErrorListener<E>> getErrorObservable() {
+        return mErrorObservable;
     }
 
     protected void checkReleased() {
@@ -647,9 +669,19 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
 
     public abstract int getDuration();
 
+    protected abstract void openDataSource();
+
     @CallSuper
-    protected void openDataSource() {
-        mStateChangedObservable.dispatchBeforeOpenDataSource();
+    protected synchronized void beforeOpenDataSource() {
+        logger.debug("beforeOpenDataSource()");
+        checkReleased();
+        onBufferingUpdate(0);
+        setControlsToDefault();
+        if (isContentSpecified()) {
+            mLastContentUriToOpen = mContentUri != null? mContentUri : null;
+            mLastAssetFileDescriptorToOpen = mContentFileDescriptor != null? mContentFileDescriptor : null;
+            mStateChangedObservable.dispatchBeforeOpenDataSource();
+        }
     }
 
     public abstract void start();
@@ -667,17 +699,29 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         }
     }
 
-    public void suspend() {
+    public final void suspend() {
         logger.debug("suspend()");
         releasePlayer(false);
     }
 
     public abstract void seekTo(int msec);
 
+    protected void setControlsToDefault() {
+        checkReleased();
+        mCanPause = true;
+        mCanSeekBack = false;
+        mCanSeekForward = false;
+    }
+
     /*
     * release the media player at any state
     */
-    protected abstract void releasePlayer(boolean clearTargetState);
+    @CallSuper
+    protected void releasePlayer(boolean clearTargetState) {
+        checkReleased();
+        onBufferingUpdate(0);
+        setControlsToDefault();
+    }
 
     @CallSuper
     public void release() {
@@ -685,22 +729,63 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         if (isReleased()) {
             throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was already released");
         }
+        releasePlayer(true);
         unregisterReceivers();
         stopExecutor();
     }
 
+    /** @return false if resource not opened or reopened, true otherwise */
     @CallSuper
-    protected synchronized void onPrepared() {
+    protected synchronized boolean onPrepared() {
         logger.info("onPrepared(), content: " + (mContentUri != null? getContentUri() : getContentAssetFileDescriptor()));
+
         checkReleased();
+        cancelResetCallback();
+
+        if (!isContentSpecified()) {
+            logger.error("can't open data source: content is not specified");
+            releasePlayer(true);
+            return false;
+        }
+
+        boolean reopen = false;
+
+        if (mLastContentUriToOpen != null) {
+            if (!CompareUtils.objectsEqual(mLastContentUriToOpen, mContentUri)) {
+                reopen = true;
+            }
+        } else if (mLastAssetFileDescriptorToOpen != null) {
+            if (!CompareUtils.objectsEqual(mLastAssetFileDescriptorToOpen, mContentFileDescriptor)) {
+                reopen = true;
+            }
+        } else {
+            return false;
+        }
+
+        if (reopen) {
+            if (mContentUri != null) {
+                logger.warn("last uri (" + mLastContentUriToOpen + ") or descriptor (" + mLastAssetFileDescriptorToOpen + ") to open and target (" + mContentUri + ") don't match");
+            } else if (mContentFileDescriptor != null) {
+                logger.warn("last uri (" + mLastContentUriToOpen + ") or descriptor (" + mLastAssetFileDescriptorToOpen + ") to open and target (" + mContentFileDescriptor + ") don't match");
+            }
+            logger.debug("releasing and reopening...");
+            releasePlayer(false);
+            openDataSource();
+            return false;
+        }
+
+        return true;
+
     }
 
     @CallSuper
     protected synchronized void onBufferingUpdate(int percent) {
         logger.debug("onBufferingUpdate(), percent=" + percent);
         checkReleased();
-        mCurrentBufferPercentage = percent;
-        mBufferingUpdateObservable.dispatchOnOnBufferingUpdate(mCurrentBufferPercentage);
+        if (percent != mCurrentBufferPercentage) {
+            mCurrentBufferPercentage = percent;
+            mBufferingUpdateObservable.dispatchOnOnBufferingUpdate(mCurrentBufferPercentage);
+        }
     }
 
     @CallSuper
@@ -710,6 +795,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         mCompletionObservable.dispatchCompleted();
     }
 
+    /** @return true if error was handled */
     @CallSuper
     protected synchronized boolean onError(@NonNull E error) {
         logger.error("onError(), error=" + error);

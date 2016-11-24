@@ -14,7 +14,7 @@ import net.maxsmr.commonutils.data.CompareUtils;
 import net.maxsmr.commonutils.data.FileHelper;
 import net.maxsmr.commonutils.data.Observable;
 import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
-import net.maxsmr.mediaplayercontroller.mpc.MediaPlayerController;
+import net.maxsmr.mediaplayercontroller.mpc.nativeplayer.MediaPlayerController;
 import net.maxsmr.mediaplayercontroller.playlist.item.AbsPlaylistItem;
 import net.maxsmr.mediaplayercontroller.playlist.item.DescriptorPlaylistItem;
 import net.maxsmr.mediaplayercontroller.playlist.item.UriPlaylistItem;
@@ -23,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.net.HttpURLConnection;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -32,8 +33,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ScheduledFuture;
-
-import javax.net.ssl.HttpsURLConnection;
 
 public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsPlaylistItem> {
 
@@ -121,7 +120,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
                 if (isFile) {
                     return !TextUtils.isEmpty(uri.getPath()) &&
                             FileHelper.isFileCorrect(new File(uri.getPath())) &&
-                            isFileMimeTypeValid(HttpsURLConnection.guessContentTypeFromName(uriString));
+                            isFileMimeTypeValid(HttpURLConnection.guessContentTypeFromName(uriString));
                 } else
                     return uri.getScheme() != null && (uri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_CONTENT)
                             || uri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_ANDROID_RESOURCE)
@@ -596,7 +595,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         mPlayerController.resume();
         boolean schedule = false;
         if (track.duration != AbsPlaylistItem.DURATION_NOT_SPECIFIED) {
-            schedule = !mLoopPlaylist || getTracksCount() > 1;
+            schedule = /*!mLoopPlaylist ||*/ getTracksCount() > 1;
             if (track.playMode != BaseMediaPlayerController.PlayMode.NONE && !track.playMode.isInfiniteMode) {
                 if (track instanceof UriPlaylistItem) {
                     Uri uri = !TextUtils.isEmpty(((UriPlaylistItem) track).uri) ? Uri.parse(fixUrl(((UriPlaylistItem) track).uri)) : null;

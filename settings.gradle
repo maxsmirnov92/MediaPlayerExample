@@ -1,1 +1,1 @@
-include ':app', ':mediaplayercontroller'
+include /*':app',*/ ':mediaplayercontroller'
