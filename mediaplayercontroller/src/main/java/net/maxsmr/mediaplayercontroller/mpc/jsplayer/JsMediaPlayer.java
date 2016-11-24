@@ -84,7 +84,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
         }
     }
 
-    protected synchronized boolean isPageLoaded() {
+    public synchronized boolean isPageLoaded() {
         boolean urlEmpty = TextUtils.isEmpty(mWebView.getUrl());
         if (urlEmpty || isReleased()) {
             mPageLoaded = false;
@@ -617,6 +617,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
 
     public interface OnPageLoadSuccessListener {
 
+        @MainThread
         void onPageReady(String uri, boolean isOpenResourceScheduled);
     }
 
