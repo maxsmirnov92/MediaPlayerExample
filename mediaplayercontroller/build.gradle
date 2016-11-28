@@ -3,7 +3,7 @@ apply plugin: 'maven'
 
 def groupId = "net.maxsmr"
 def artifactId = "mediaplayercontroller"
-def version = "1.6"
+def version = "1.6.5"
 
 def releaseDir = "${buildDir}/release"
 
@@ -80,5 +80,5 @@ dependencies {
     testCompile 'junit:junit:4.12'
     compile 'com.android.support:appcompat-v7:23.3.0'
 
-    compile 'net.maxsmr:tasksutils:1.0.2.1'
+    compile 'net.maxsmr:tasksutils:1.0.2.2'
 }

@@ -131,7 +131,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
         if (playlistManager == null) {
             throw new RuntimeException("playlistManager is not created");
         }
-        playlistManager.enableLoopPlaylist(true);
+        playlistManager.setLoopPlaylist(true);
         playlistManager.getTracksSetObservable().registerObserver(this);
     }
 

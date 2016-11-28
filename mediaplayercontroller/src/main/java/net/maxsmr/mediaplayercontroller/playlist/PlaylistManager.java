@@ -12,9 +12,9 @@ import android.text.TextUtils;
 import net.maxsmr.commonutils.android.media.MetadataRetriever;
 import net.maxsmr.commonutils.data.CompareUtils;
 import net.maxsmr.commonutils.data.FileHelper;
+import net.maxsmr.commonutils.data.MathUtils;
 import net.maxsmr.commonutils.data.Observable;
 import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
-import net.maxsmr.mediaplayercontroller.mpc.nativeplayer.MediaPlayerController;
 import net.maxsmr.mediaplayercontroller.playlist.item.AbsPlaylistItem;
 import net.maxsmr.mediaplayercontroller.playlist.item.DescriptorPlaylistItem;
 import net.maxsmr.mediaplayercontroller.playlist.item.UriPlaylistItem;
@@ -206,6 +206,9 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
 
     private int mCurrentTrackIndex = NO_POSITION;
 
+    @NonNull
+    private TracksSwitchMode mTracksSwitchMode = TracksSwitchMode.CONSEQUENTIALLY;
+
     private final MediaControllerCallbacks mMediaControllerCallbacks = new MediaControllerCallbacks();
 
     /**
@@ -245,12 +248,19 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     };
 
+    public boolean isReleased() {
+        synchronized (mTracks) {
+            return mReleased;
+        }
+    }
+
     private void checkReleased() {
-        if (mReleased) {
+        if (isReleased()) {
             throw new IllegalStateException(PlaylistManager.class.getSimpleName() + " was released");
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void init() {
 
         checkReleased();
@@ -261,6 +271,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         mPlayerController.getErrorObservable().registerObserver(mMediaControllerCallbacks);
     }
 
+    @SuppressWarnings("unchecked")
     public void release() {
 
         checkReleased();
@@ -299,19 +310,20 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         return mPlayerController.getTargetState();
     }
 
-//    public PlayMode getPlayMode() {
-//        return mPlayMode;
-//    }
-//
-//    /**
-//     * tracks will be cleared if different
-//     */
-//    public void setPlayMode(@NonNull PlayMode playMode) {
-//        if (playMode != mPlayMode) {
-//            clearTracks();
-//            mPlayMode = playMode;
-//        }
-//    }
+    @NonNull
+    public TracksSwitchMode getTracksSwitchMode() {
+        synchronized (mTracks) {
+            checkReleased();
+            return mTracksSwitchMode;
+        }
+    }
+
+    public void setTracksSwitchMode(@NonNull TracksSwitchMode tracksSwitchMode) {
+        synchronized (mTracks) {
+            checkReleased();
+            mTracksSwitchMode = tracksSwitchMode;
+        }
+    }
 
     public boolean isPlaylistLooping() {
         synchronized (mTracks) {
@@ -320,10 +332,10 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    public void enableLoopPlaylist(boolean enable) {
+    public void setLoopPlaylist(boolean toggle) {
         synchronized (mTracks) {
             checkReleased();
-            mLoopPlaylist = enable;
+            mLoopPlaylist = toggle;
         }
     }
 
@@ -547,7 +559,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         logger.debug("previousTrack()");
         synchronized (mTracks) {
             if (!isTracksEmpty()) {
-                if (mPlayerController.isPlaying()) {
+                if (getTargetState() == BaseMediaPlayerController.State.PLAYING) {
                     playPreviousTrack();
                 } else {
                     preparePreviousTrack();
@@ -560,10 +572,43 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         logger.debug("nextTrack()");
         synchronized (mTracks) {
             if (!isTracksEmpty()) {
-                if (mPlayerController.isPlaying()) {
+                if (getTargetState() == BaseMediaPlayerController.State.PLAYING) {
                     playNextTrack();
                 } else {
                     prepareNextTrack();
+                }
+            }
+        }
+    }
+
+    public void nextTrackByMode() {
+        synchronized (mTracks) {
+            if (!isTracksEmpty()) {
+                boolean handled = false;
+                switch (mTracksSwitchMode) {
+                    case RANDOM:
+                        if (hasCurrentTrack()) {
+                            if (getTracksCount() > 1) {
+                                int prevIndex = mCurrentTrackIndex;
+                                int newIndex = MathUtils.randInt(0, getTracksCount() - 1);
+                                if (newIndex != prevIndex) {
+                                    if (getTargetState() == BaseMediaPlayerController.State.PLAYING) {
+                                        playTrack(newIndex);
+                                    } else {
+                                        prepareTrack(newIndex);
+                                    }
+                                    handled = true;
+                                }
+                            }
+                        }
+                        break;
+                }
+                if (!handled) {
+                    if (getTargetState() == BaseMediaPlayerController.State.PLAYING) {
+                        playNextTrack();
+                    } else {
+                        prepareNextTrack();
+                    }
                 }
             }
         }
@@ -628,7 +673,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
     private void cancelResetFuture() {
         if (mTrackResetFuture != null) {
             if (!mTrackResetFuture.isCancelled() && !mTrackResetFuture.isDone()) {
-                logger.debug("cancelling reset callback (play timeout)...");
+//                logger.debug("cancelling reset callback (play timeout)...");
                 mTrackResetFuture.cancel(true);
             }
             mTrackResetFuture = null;
@@ -704,7 +749,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    protected final void rangeCheck(int position) {
+    protected final void rangeCheck(int position) throws IndexOutOfBoundsException {
         synchronized (mTracks) {
             if (position < 0 || position >= mTracks.size()) {
                 throw new IndexOutOfBoundsException("incorrect position: " + position);
@@ -712,7 +757,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    protected final void rangeCheckForAdd(int position) {
+    protected final void rangeCheckForAdd(int position) throws IndexOutOfBoundsException {
         synchronized (mTracks) {
             if (position < 0 || position > mTracks.size()) {
                 throw new IndexOutOfBoundsException("incorrect add position: " + position);
@@ -830,10 +875,33 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    // TODO randomizer
+    public final void shuffleTracks() {
+        synchronized (mTracks) {
+            if (!isTracksEmpty()) {
+                List<T> shuffledTracks = new ArrayList<>(mTracks);
+                Collections.shuffle(shuffledTracks);
+                if (hasCurrentTrack()) {
+                    boolean wasPlaying = getTargetState() == BaseMediaPlayerController.State.PLAYING;
+                    T currentTrack = getTrack(mCurrentTrackIndex);
+                    int newIndex = shuffledTracks.indexOf(currentTrack);
+                    setTracks(shuffledTracks);
+                    if (!isTracksEmpty()) {
+                        if (newIndex == NO_POSITION) {
+                            newIndex = 0;
+                        }
+                        if (wasPlaying) {
+                            playTrack(newIndex);
+                        } else {
+                            prepareTrack(newIndex);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     /**
-     * @param tracks null for reset playlist
+     * @param tracks null or empty to reset playlist
      */
     public final boolean setTracks(@Nullable Collection<T> tracks) {
         synchronized (mTracks) {
@@ -855,11 +923,21 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    /**
-     * @param tracks null for reset playlist
-     */
-    public final void setTracks(T... tracks) {
-        setTracks(tracks != null ? Arrays.asList(tracks) : null);
+    public final boolean setTracks(T... tracks) {
+        return setTracks(tracks != null ? Arrays.asList(tracks) : null);
+    }
+
+    public final boolean setTracksWithShuffle(@Nullable Collection<T> tracks) {
+        List<T> tracksList = null;
+        if (tracks != null) {
+            tracksList = new ArrayList<>(tracks);
+            Collections.shuffle(tracksList);
+        }
+        return setTracks(tracksList);
+    }
+
+    public final boolean setTracksWithShuffle(T... tracks) {
+        return setTracksWithShuffle(tracks != null ? Arrays.asList(tracks) : null);
     }
 
     @CallSuper
@@ -1066,29 +1144,23 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
 
         @Override
-        public void onTargetStateChanged(@NonNull MediaPlayerController.State targetState) {
+        public void onTargetStateChanged(@NonNull BaseMediaPlayerController.State targetState) {
 
         }
 
         @Override
-        public void onCompletion(final boolean isLooping) {
-            logger.debug("onCompletion(), isLooping=" + isLooping);
+        public void onCompletion(final boolean isTrackLooping) {
+            logger.debug("onCompletion(), isTrackLooping=" + isTrackLooping);
             synchronized (mTracks) {
 
-                if (!isLooping) {
-                    cancelResetFuture();
-                }
+                cancelResetFuture();
 
                 if (hasCurrentTrack()) {
                     mActiveTrackChangedObservable.dispatchCompleted(getCurrentTrack());
                 }
 
-                if (!isLooping) {
-                    if (getTargetState() == BaseMediaPlayerController.State.PLAYING) {
-                        playNextTrack();
-                    } else {
-                        nextTrack();
-                    }
+                if (!isTrackLooping) {
+                    nextTrackByMode();
                 }
             }
         }
@@ -1104,16 +1176,13 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
                     mActiveTrackChangedObservable.dispatchError(error, getCurrentTrack());
                 }
 
-                if (getTargetState() == BaseMediaPlayerController.State.PLAYING) {
-                    playNextTrack();
-                } else {
-                    nextTrack();
-                }
+                nextTrackByMode();
             }
         }
     }
 
     public interface OnActiveTrackChangedListener<T extends AbsPlaylistItem> {
+
         void onPrepare(@NonNull T track, @Nullable T previous);
 
         void onPlay(@NonNull T current, @Nullable T previous);
@@ -1126,28 +1195,33 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
     }
 
     public interface OnTracksSetListener<T extends AbsPlaylistItem> {
+
         void onTracksSet(@NonNull List<T> newTracks);
 
         void onTracksNotSet(@NonNull List<T> incorrectTracks);
     }
 
     public interface OnTrackAddedListener<T extends AbsPlaylistItem> {
+
         void onTrackAdded(int to, T trackUrl);
 
         void onTrackAddFailed(int to, T trackUrl);
     }
 
     public interface OnTrackSetListener<T extends AbsPlaylistItem> {
+
         void onTrackSet(int in, T track);
 
         void onTrackSetFailed(int in, T track);
     }
 
     public interface OnTrackRemovedListener<T extends AbsPlaylistItem> {
+
         void onTrackRemoved(int from, T track);
     }
 
     public interface OnTracksClearedListener {
+
         void onTracksCleared(int oldCount);
     }
 
@@ -1276,6 +1350,11 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
 
             }
         }
+    }
+
+    public enum TracksSwitchMode {
+
+        CONSEQUENTIALLY, RANDOM
     }
 
 }

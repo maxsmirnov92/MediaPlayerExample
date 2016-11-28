@@ -26,7 +26,6 @@ import net.maxsmr.commonutils.android.media.MetadataRetriever;
 import net.maxsmr.commonutils.data.CompareUtils;
 import net.maxsmr.commonutils.data.FileHelper;
 import net.maxsmr.commonutils.data.Observable;
-import net.maxsmr.mediaplayercontroller.mpc.nativeplayer.MediaPlayerController;
 import net.maxsmr.mediaplayercontroller.mpc.receivers.AudioFocusChangeReceiver;
 import net.maxsmr.mediaplayercontroller.mpc.receivers.HeadsetPlugBroadcastReceiver;
 import net.maxsmr.mediaplayercontroller.mpc.receivers.NoisyAudioBroadcastReceiver;
@@ -54,9 +53,7 @@ import java.util.concurrent.TimeUnit;
 
 public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerController.OnErrorListener.MediaError> implements MediaController.MediaPlayerControl {
 
-    protected final Logger logger = LoggerFactory.getLogger(getClass());
-
-    public final static long DEFAULT_PREPARE_RESET_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(20);
+    public final static long DEFAULT_PREPARE_RESET_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(15);
 
     public final static long DEFAULT_NOTIFY_PLAYBACK_TIME_INTERVAL_MS = TimeUnit.SECONDS.toMillis(1);
 
@@ -65,10 +62,19 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     public static final int POSITION_NO = -1;
     public static final int POSITION_START = 0;
 
+    public static final float VOLUME_MAX = 1.0f;
+    public static final float VOLUME_MIN = 0.0f;
+    public static final int VOLUME_NOT_SET = -1;
+
     protected BaseMediaPlayerController(@NonNull Context context) {
         mContext = context;
         init();
     }
+
+    protected final Logger logger = LoggerFactory.getLogger(getClass());
+
+    @NonNull
+    protected final Object mLock = new Object();
 
     protected Context mContext;
 
@@ -78,11 +84,11 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
 
     private long mNotifyPlaybackTimeInterval = DEFAULT_NOTIFY_PLAYBACK_TIME_INTERVAL_MS;
 
-    private final ScheduledThreadPoolExecutorManager mPlaybackTimeTask = new ScheduledThreadPoolExecutorManager("PlaybackTimeTask");
-
-    protected boolean mLoopWhenPreparing = false; // set looping property while preparing
+    private final ScheduledThreadPoolExecutorManager mPlaybackTimeTask = new ScheduledThreadPoolExecutorManager(ScheduledThreadPoolExecutorManager.ScheduleMode.FIXED_RATE, "PlaybackTimeTask");
 
     private ScheduledExecutorService mExecutorService;
+
+    protected boolean mLoopWhenPreparing = false; // set looping property while preparing
 
     protected Looper mMediaLooper;
 
@@ -125,10 +131,6 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
 
     protected float mVolumeLeftWhenPrepared = VOLUME_NOT_SET;
     protected float mVolumeRightWhenPrepared = VOLUME_NOT_SET;
-
-    public static final float VOLUME_MAX = 1.0f;
-    public static final float VOLUME_MIN = 0.0f;
-    public static final int VOLUME_NOT_SET = -1;
 
     protected long mPrepareResetTimeoutMs = DEFAULT_PREPARE_RESET_TIMEOUT_MS;
 
@@ -304,7 +306,14 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     }
 
     @NonNull
+    public final Context getContext() {
+        checkReleased();
+        return mContext;
+    }
+
+    @NonNull
     public final Looper getMediaLooper() {
+        checkReleased();
         return mMediaLooper == null ? Looper.getMainLooper() : mMediaLooper;
     }
 
@@ -321,7 +330,12 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         if (prepareResetTimeoutMs <= 0) {
             throw new IllegalArgumentException("incorrect prepareResetTimeoutMs: " + prepareResetTimeoutMs);
         }
-        this.mPrepareResetTimeoutMs = prepareResetTimeoutMs;
+        if (prepareResetTimeoutMs != mPrepareResetTimeoutMs) {
+            this.mPrepareResetTimeoutMs = prepareResetTimeoutMs;
+            if (isPreparing()) {
+                scheduleResetCallback();
+            }
+        }
     }
 
     public void setReactOnExternalEvents(boolean reactOnExternalEvents) {
@@ -340,54 +354,66 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     }
 
     @NonNull
-    public synchronized State getCurrentState() {
-        return mCurrentState;
+    public State getCurrentState() {
+        synchronized (mLock) {
+            return mCurrentState;
+        }
     }
 
-    protected synchronized void setCurrentState(@NonNull State newState) {
-        checkReleased();
-        if (newState != mCurrentState) {
-            State oldState = mCurrentState;
-            mCurrentState = newState;
-            logger.info("current state: " + mCurrentState);
-            mStateChangedObservable.dispatchCurrentStateChanged(oldState);
+    protected void setCurrentState(@NonNull State newState) {
+        synchronized (mLock) {
+            checkReleased();
+            if (newState != mCurrentState) {
+                State oldState = mCurrentState;
+                mCurrentState = newState;
+                logger.info("current state: " + mCurrentState);
+                mStateChangedObservable.dispatchCurrentStateChanged(oldState);
+            }
         }
     }
 
     @NonNull
-    public synchronized State getTargetState() {
-        return mTargetState;
+    public State getTargetState() {
+        synchronized (mLock) {
+            return mTargetState;
+        }
     }
 
-    protected synchronized void setTargetState(@NonNull State newState) {
-        checkReleased();
-        if (newState != mTargetState) {
-            mTargetState = newState;
-            logger.info("target state: " + mTargetState);
-            mStateChangedObservable.dispatchTargetStateChanged();
+    protected void setTargetState(@NonNull State newState) {
+        synchronized (mLock) {
+            checkReleased();
+            if (newState != mTargetState) {
+                mTargetState = newState;
+                logger.info("target state: " + mTargetState);
+                mStateChangedObservable.dispatchTargetStateChanged();
+            }
         }
     }
 
     @NonNull
-    public synchronized Pair<Float, Float> getPreparedVolume() {
-        return new Pair<>(mVolumeLeftWhenPrepared, mVolumeRightWhenPrepared);
+    public Pair<Float, Float> getPreparedVolume() {
+        synchronized (mLock) {
+            return new Pair<>(mVolumeLeftWhenPrepared, mVolumeRightWhenPrepared);
+        }
     }
 
     @CallSuper
-    public synchronized void setVolume(float left, float right) {
-        checkReleased();
-        if (left != VOLUME_NOT_SET) {
-            if (left < VOLUME_MIN || left > VOLUME_MAX) {
-                throw new IllegalArgumentException("incorrect left volume: " + left);
+    public void setVolume(float left, float right) {
+        synchronized (mLock) {
+            checkReleased();
+            if (left != VOLUME_NOT_SET) {
+                if (left < VOLUME_MIN || left > VOLUME_MAX) {
+                    throw new IllegalArgumentException("incorrect left volume: " + left);
+                }
             }
-        }
-        if (right != VOLUME_NOT_SET) {
-            if (right < VOLUME_MIN || right > VOLUME_MAX) {
-                throw new IllegalArgumentException("incorrect right volume: " + left);
+            if (right != VOLUME_NOT_SET) {
+                if (right < VOLUME_MIN || right > VOLUME_MAX) {
+                    throw new IllegalArgumentException("incorrect right volume: " + left);
+                }
             }
+            mVolumeLeftWhenPrepared = left;
+            mVolumeRightWhenPrepared = right;
         }
-        mVolumeLeftWhenPrepared = left;
-        mVolumeRightWhenPrepared = right;
     }
 
     public boolean isNoCheckMediaContentType() {
@@ -395,42 +421,59 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     }
 
     public void setNoCheckMediaContentType(boolean toggle) {
-        mNoCheckMediaContentType = toggle;
+        synchronized (mLock) {
+            checkReleased();
+            mNoCheckMediaContentType = toggle;
+        }
     }
 
     @Override
-    public synchronized int getBufferPercentage() {
-        return mCurrentBufferPercentage;
+    public int getBufferPercentage() {
+        synchronized (mLock) {
+            return mCurrentBufferPercentage;
+        }
     }
 
-    public synchronized boolean isContentSpecified() {
+    public boolean isContentSpecified() {
         return isAudioSpecified() || isVideoSpecified() || isPictureSpecified() || isPageSpecified();
     }
 
-    public synchronized boolean isAudioSpecified() {
-        return mPlayMode == PlayMode.AUDIO && (mContentUri != null || mContentFileDescriptor != null);
+    public boolean isAudioSpecified() {
+        synchronized (mLock) {
+            return mPlayMode == PlayMode.AUDIO && (mContentUri != null || mContentFileDescriptor != null);
+        }
     }
 
-    public synchronized boolean isVideoSpecified() {
-        return mPlayMode == PlayMode.VIDEO && (mContentUri != null || mContentFileDescriptor != null);
+    public boolean isVideoSpecified() {
+        synchronized (mLock) {
+            return mPlayMode == PlayMode.VIDEO && (mContentUri != null || mContentFileDescriptor != null);
+        }
     }
 
-    public synchronized boolean isPictureSpecified() {
-        return mPlayMode == PlayMode.PICTURE && (mContentUri != null || mContentFileDescriptor != null);
+    public boolean isPictureSpecified() {
+        synchronized (mLock) {
+            return mPlayMode == PlayMode.PICTURE && (mContentUri != null || mContentFileDescriptor != null);
+        }
     }
 
-    public synchronized boolean isPageSpecified() {
-        return mPlayMode == PlayMode.PAGE && (mContentUri != null || mContentFileDescriptor != null);
+    public boolean isPageSpecified() {
+        synchronized (mLock) {
+            return mPlayMode == PlayMode.PAGE && (mContentUri != null || mContentFileDescriptor != null);
+        }
     }
 
     @Nullable
-    public synchronized Uri getContentUri() {
-        return mContentUri;
+    public Uri getContentUri() {
+        synchronized (mLock) {
+            return mContentUri;
+        }
     }
 
     @Nullable
-    public synchronized AssetFileDescriptor getContentAssetFileDescriptor() {
-        return mContentFileDescriptor;
+    public AssetFileDescriptor getContentAssetFileDescriptor() {
+        synchronized (mLock) {
+            return mContentFileDescriptor;
+        }
     }
 
     public void setContentFile(@NonNull PlayMode playMode, @Nullable File file) {
@@ -463,82 +506,86 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         setContentUri(playMode, contentUri, null);
     }
 
-    public synchronized void setContentUri(@NonNull PlayMode playMode, @Nullable Uri contentUri, @Nullable Map<String, String> headers) {
-        logger.debug("setContentUri(), playMode=" + playMode + ", contentUri=" + contentUri + ", headers=" + headers);
+    public void setContentUri(@NonNull PlayMode playMode, @Nullable Uri contentUri, @Nullable Map<String, String> headers) {
+        synchronized (mLock) {
+            logger.debug("setContentUri(), playMode=" + playMode + ", contentUri=" + contentUri + ", headers=" + headers);
 
-        checkReleased();
+            checkReleased();
 
-        if (playMode != PlayMode.NONE) {
-            if (!isPlayModeSupported(playMode)) {
-                throw new IllegalArgumentException("playMode " + playMode + " is not supported");
-            }
-        }
-
-        if (mPlayMode != playMode || !CompareUtils.objectsEqual(contentUri, mContentUri) || !CompareUtils.objectsEqual(headers, mContentHeaders)) {
-
-            if (mContentFileDescriptor != null) {
-                try {
-                    mContentFileDescriptor.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
+            if (playMode != PlayMode.NONE) {
+                if (!isPlayModeSupported(playMode)) {
+                    throw new IllegalArgumentException("playMode " + playMode + " is not supported");
                 }
-                mContentFileDescriptor = null;
-            }
-            mContentUri = contentUri;
-            mContentHeaders = headers != null ? new LinkedHashMap<>(headers) : new LinkedHashMap<String, String>();
-
-            if (mContentUri != null || mContentFileDescriptor != null) {
-                mPlayMode = playMode;
-            } else {
-                mPlayMode = PlayMode.NONE;
             }
 
-            if (mCurrentState != State.IDLE) {
-                if (isContentSpecified()) {
-                    openDataSource();
+            if (mPlayMode != playMode || !CompareUtils.objectsEqual(contentUri, mContentUri) || !CompareUtils.objectsEqual(headers, mContentHeaders)) {
+
+                if (mContentFileDescriptor != null) {
+                    try {
+                        mContentFileDescriptor.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    mContentFileDescriptor = null;
+                }
+                mContentUri = contentUri;
+                mContentHeaders = headers != null ? new LinkedHashMap<>(headers) : new LinkedHashMap<String, String>();
+
+                if (mContentUri != null || mContentFileDescriptor != null) {
+                    mPlayMode = playMode;
                 } else {
-                    stop();
+                    mPlayMode = PlayMode.NONE;
+                }
+
+                if (mCurrentState != State.IDLE) {
+                    if (isContentSpecified()) {
+                        openDataSource();
+                    } else {
+                        stop();
+                    }
                 }
             }
         }
     }
 
-    public synchronized void setContentFd(@NonNull PlayMode playMode, @Nullable AssetFileDescriptor contentFd) {
-        logger.debug("setContentFd(), playMode=" + playMode + ", contentFd=" + contentFd);
+    public void setContentFd(@NonNull PlayMode playMode, @Nullable AssetFileDescriptor contentFd) {
+        synchronized (mLock) {
+            logger.debug("setContentFd(), playMode=" + playMode + ", contentFd=" + contentFd);
 
-        checkReleased();
+            checkReleased();
 
-        if (playMode != PlayMode.NONE) {
-            if (!isPlayModeSupported(playMode)) {
-                throw new IllegalArgumentException("playMode " + playMode + " is not supported");
-            }
-        }
-
-        if (mPlayMode != playMode || !CompareUtils.objectsEqual(contentFd, mContentFileDescriptor)) {
-
-            if (mContentUri != null || mContentFileDescriptor != null) {
-                mPlayMode = playMode;
-            } else {
-                mPlayMode = PlayMode.NONE;
-            }
-
-            if (mContentFileDescriptor != null) {
-                try {
-                    mContentFileDescriptor.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
+            if (playMode != PlayMode.NONE) {
+                if (!isPlayModeSupported(playMode)) {
+                    throw new IllegalArgumentException("playMode " + playMode + " is not supported");
                 }
             }
 
-            mContentFileDescriptor = contentFd;
-            mContentUri = null;
-            mContentHeaders = new LinkedHashMap<>();
+            if (mPlayMode != playMode || !CompareUtils.objectsEqual(contentFd, mContentFileDescriptor)) {
 
-            if (mCurrentState != State.IDLE) {
-                if (isContentSpecified()) {
-                    openDataSource();
+                if (mContentUri != null || mContentFileDescriptor != null) {
+                    mPlayMode = playMode;
                 } else {
-                    stop();
+                    mPlayMode = PlayMode.NONE;
+                }
+
+                if (mContentFileDescriptor != null) {
+                    try {
+                        mContentFileDescriptor.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+
+                mContentFileDescriptor = contentFd;
+                mContentUri = null;
+                mContentHeaders = new LinkedHashMap<>();
+
+                if (mCurrentState != State.IDLE) {
+                    if (isContentSpecified()) {
+                        openDataSource();
+                    } else {
+                        stop();
+                    }
                 }
             }
         }
@@ -573,12 +620,12 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     public MetadataRetriever.MediaMetadata getCurrentTrackMetatada() {
         return (mContentUri != null && (TextUtils.isEmpty(mContentUri.getScheme()) || mContentUri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_FILE)) ?
                 MetadataRetriever.extractMetadata(mContext, mContentUri) :
-                (mContentFileDescriptor != null? MetadataRetriever.extractMetadata(mContentFileDescriptor.getFileDescriptor()) : null));
+                (mContentFileDescriptor != null ? MetadataRetriever.extractMetadata(mContentFileDescriptor.getFileDescriptor()) : null));
     }
 
-    protected final void scheduleResetCallback(@NonNull Runnable runnable) {
+    protected final void scheduleResetCallback() {
         cancelResetCallback();
-        mResetFuture = scheduleOnExecutor(runnable, mPrepareResetTimeoutMs);
+        mResetFuture = scheduleOnExecutor(getResetRunnable(), mPrepareResetTimeoutMs);
     }
 
     protected final void cancelResetCallback() {
@@ -592,9 +639,11 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     }
 
     @CallSuper
-    public synchronized void setLooping(boolean toggle) {
-        logger.debug("setLooping(), toggle=" + toggle);
-        mLoopWhenPreparing = toggle;
+    public void setLooping(boolean toggle) {
+        synchronized (mLock) {
+            logger.debug("setLooping(), toggle=" + toggle);
+            mLoopWhenPreparing = toggle;
+        }
     }
 
     @NonNull
@@ -648,16 +697,18 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         }
     }
 
-    public boolean isReleased() {
-        return mCurrentState == State.RELEASED;
+    public final boolean isReleased() {
+        synchronized (mLock) {
+            return mCurrentState == State.RELEASED;
+        }
     }
-
-    public abstract boolean isPlayModeSupported(@NonNull PlayMode playMode);
 
     public abstract boolean isPlayerReleased();
 
-    public synchronized final boolean isReleasingPlayer() {
-        return mReleasingPlayer;
+    public final boolean isReleasingPlayer() {
+        synchronized (mLock) {
+            return mReleasingPlayer;
+        }
     }
 
     public abstract boolean isInPlaybackState();
@@ -668,23 +719,30 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
 
     public abstract boolean isLooping();
 
+    public abstract boolean isPlayModeSupported(@NonNull PlayMode playMode);
+
     public abstract int getCurrentPosition();
 
     public abstract int getDuration();
 
+    @NonNull
+    protected abstract Runnable getResetRunnable();
+
     protected abstract void openDataSource();
 
     @CallSuper
-    protected synchronized void beforeOpenDataSource() {
-        logger.debug("beforeOpenDataSource()");
-        checkReleased();
-        onBufferingUpdate(0);
-        setControlsToDefault();
-        if (isContentSpecified()) {
-            mLastContentUriToOpen = mContentUri != null? mContentUri : null;
-            mLastAssetFileDescriptorToOpen = mContentFileDescriptor != null? mContentFileDescriptor : null;
-            mLastModeToOpen = mPlayMode;
-            mStateChangedObservable.dispatchBeforeOpenDataSource();
+    protected void beforeOpenDataSource() {
+        synchronized (mLock) {
+            logger.debug("beforeOpenDataSource()");
+            checkReleased();
+            onBufferingUpdate(0);
+            setControlsToDefault();
+            if (isContentSpecified()) {
+                mLastContentUriToOpen = mContentUri != null ? mContentUri : null;
+                mLastAssetFileDescriptorToOpen = mContentFileDescriptor != null ? mContentFileDescriptor : null;
+                mLastModeToOpen = mPlayMode;
+                mStateChangedObservable.dispatchBeforeOpenDataSource();
+            }
         }
     }
 
@@ -722,109 +780,128 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     */
     @CallSuper
     protected void releasePlayer(boolean clearTargetState) {
-        checkReleased();
-        onBufferingUpdate(0);
-        setControlsToDefault();
+        synchronized (mLock) {
+            checkReleased();
+            onBufferingUpdate(0);
+            setControlsToDefault();
+        }
     }
 
     @CallSuper
     public void release() {
-        logger.debug("release()");
-        if (isReleased()) {
-            throw new IllegalStateException(MediaPlayerController.class.getSimpleName() + " was already released");
+        synchronized (mLock) {
+            logger.debug("release()");
+            if (isReleased()) {
+                throw new IllegalStateException(BaseMediaPlayerController.class.getSimpleName() + " was already released");
+            }
+            releasePlayer(true);
+            unregisterReceivers();
+            stopExecutor();
         }
-        releasePlayer(true);
-        unregisterReceivers();
-        stopExecutor();
     }
 
-    /** @return false if resource not opened or reopened, true otherwise */
+    /**
+     * @return false if resource not opened or reopened, true otherwise
+     */
     @CallSuper
-    protected synchronized boolean onPrepared() {
-        logger.info("onPrepared(), content: " + (mContentUri != null? getContentUri() : getContentAssetFileDescriptor()));
+    protected boolean onPrepared() {
+        synchronized (mLock) {
+            logger.info("onPrepared(), " +
+                    "target content: " + (mContentUri != null ? mContentUri : mContentFileDescriptor) + ", opened content: " + (mLastContentUriToOpen != null ? mLastContentUriToOpen : mLastAssetFileDescriptorToOpen) +
+                    " | target play mode: " + mPlayMode + ", last play mode: " + mLastModeToOpen);
 
-        checkReleased();
-        cancelResetCallback();
+            checkReleased();
+            cancelResetCallback();
 
-        if (!isContentSpecified()) {
-            logger.error("can't open data source: content is not specified");
-            releasePlayer(true);
-            return false;
-        }
+            boolean result = true;
 
-        boolean reopen = false;
+            if (!isContentSpecified()) {
+                logger.error("can't open data source: content is not specified");
+                releasePlayer(true);
+                result = false;
+            }
 
-        if (mLastModeToOpen != PlayMode.NONE) {
-            if (mPlayMode == mLastModeToOpen) {
-                if (mLastContentUriToOpen != null) {
-                    if (!CompareUtils.objectsEqual(mLastContentUriToOpen, mContentUri)) {
-                        reopen = true;
-                    }
-                } else if (mLastAssetFileDescriptorToOpen != null) {
-                    if (!CompareUtils.objectsEqual(mLastAssetFileDescriptorToOpen, mContentFileDescriptor)) {
-                        reopen = true;
+            if (result) {
+                boolean reopen = false;
+
+                if (mPlayMode == mLastModeToOpen) {
+                    if (mLastContentUriToOpen != null) {
+                        if (!CompareUtils.objectsEqual(mLastContentUriToOpen, mContentUri)) {
+                            reopen = true;
+                        }
+                    } else if (mLastAssetFileDescriptorToOpen != null) {
+                        if (!CompareUtils.objectsEqual(mLastAssetFileDescriptorToOpen, mContentFileDescriptor)) {
+                            reopen = true;
+                        }
+                    } else {
+                        result = false;
                     }
                 } else {
-                    return false;
+                    reopen = true;
                 }
-            } else {
-                reopen = true;
+
+                if (reopen) {
+                    if (mContentUri != null) {
+                        logger.warn("last uri (" + mLastContentUriToOpen + ") or descriptor (" + mLastAssetFileDescriptorToOpen + ") to open and target (" + mContentUri + ") don't match");
+                    } else if (mContentFileDescriptor != null) {
+                        logger.warn("last uri (" + mLastContentUriToOpen + ") or descriptor (" + mLastAssetFileDescriptorToOpen + ") to open and target (" + mContentFileDescriptor + ") don't match");
+                    }
+                    logger.debug("releasing and reopening...");
+                    releasePlayer(false);
+                    openDataSource();
+                    result = false;
+                }
             }
-        } else {
-            return false;
-        }
 
-        if (reopen) {
-            if (mContentUri != null) {
-                logger.warn("last uri (" + mLastContentUriToOpen + ") or descriptor (" + mLastAssetFileDescriptorToOpen + ") to open and target (" + mContentUri + ") don't match");
-            } else if (mContentFileDescriptor != null) {
-                logger.warn("last uri (" + mLastContentUriToOpen + ") or descriptor (" + mLastAssetFileDescriptorToOpen + ") to open and target (" + mContentFileDescriptor + ") don't match");
+            return result;
+        }
+    }
+
+    @CallSuper
+    protected void onBufferingUpdate(int percent) {
+        synchronized (mLock) {
+            logger.debug("onBufferingUpdate(), percent=" + percent);
+            checkReleased();
+            if (percent != mCurrentBufferPercentage) {
+                mCurrentBufferPercentage = percent;
+                mBufferingUpdateObservable.dispatchOnOnBufferingUpdate(mCurrentBufferPercentage);
             }
-            logger.debug("releasing and reopening...");
-            releasePlayer(false);
-            openDataSource();
-            return false;
-        }
-
-        return true;
-
-    }
-
-    @CallSuper
-    protected synchronized void onBufferingUpdate(int percent) {
-        logger.debug("onBufferingUpdate(), percent=" + percent);
-        checkReleased();
-        if (percent != mCurrentBufferPercentage) {
-            mCurrentBufferPercentage = percent;
-            mBufferingUpdateObservable.dispatchOnOnBufferingUpdate(mCurrentBufferPercentage);
         }
     }
 
     @CallSuper
-    protected synchronized void onCompletion() {
-        logger.info("onCompletion()");
-        checkReleased();
-        mCompletionObservable.dispatchCompleted();
+    protected void onCompletion() {
+        synchronized (mLock) {
+            logger.info("onCompletion()");
+            checkReleased();
+            mCompletionObservable.dispatchCompleted();
+        }
     }
 
-    /** @return true if error was handled */
+    /**
+     * @return true if error was handled
+     */
     @CallSuper
-    protected synchronized boolean onError(@NonNull E error) {
-        logger.error("onError(), error=" + error);
-        checkReleased();
-        mErrorObservable.dispatchError(error);
-        return true;
+    protected boolean onError(@NonNull E error) {
+        synchronized (mLock) {
+            logger.error("onError(), error=" + error);
+            checkReleased();
+            mErrorObservable.dispatchError(error);
+            return true;
+        }
     }
 
     public void setNotifyPlaybackTimeInterval(long intervalMs) {
-        checkReleased();
-        if (intervalMs <= 0) {
-            throw new IllegalArgumentException("incorrect intervalMs: " + intervalMs);
-        }
-        if (intervalMs != mNotifyPlaybackTimeInterval) {
-            mNotifyPlaybackTimeInterval = intervalMs;
-            if (mPlaybackTimeTask.getIntervalMs() != intervalMs && isPlaying()) {
-                restartPlaybackTimeTask();
+        synchronized (mLock) {
+            checkReleased();
+            if (intervalMs <= 0) {
+                throw new IllegalArgumentException("incorrect intervalMs: " + intervalMs);
+            }
+            if (intervalMs != mNotifyPlaybackTimeInterval) {
+                mNotifyPlaybackTimeInterval = intervalMs;
+                if (isPlaying()) {
+                    restartPlaybackTimeTask();
+                }
             }
         }
     }
@@ -920,25 +997,29 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         }
     }
 
-    protected synchronized void handleInterruptEventStart() {
-        logger.debug("handleInterruptEventStart()");
-        if (isPreparing() || isPlaying()) {
-            State previousState = getCurrentState();
-            State previousTargetState = getTargetState();
-            pause();
-            if (previousState == State.PLAYING || previousTargetState == State.PLAYING) {
-                setTargetState(State.PLAYING);
+    protected void handleInterruptEventStart() {
+        synchronized (mLock) {
+            logger.debug("handleInterruptEventStart()");
+            if (isPreparing() || isPlaying()) {
+                State previousState = getCurrentState();
+                State previousTargetState = getTargetState();
+                pause();
+                if (previousState == State.PLAYING || previousTargetState == State.PLAYING) {
+                    setTargetState(State.PLAYING);
+                }
+                mInterrupted = true;
             }
-            mInterrupted = true;
         }
     }
 
-    protected synchronized void handleInterruptEventEnd() {
-        logger.debug("handleInterruptEventEnd()");
-        if (mInterrupted && mTargetState == State.PLAYING) {
-            start();
+    protected void handleInterruptEventEnd() {
+        synchronized (mLock) {
+            logger.debug("handleInterruptEventEnd()");
+            if (mInterrupted && mTargetState == State.PLAYING) {
+                start();
+            }
+            mInterrupted = false;
         }
-        mInterrupted = false;
     }
 
     public final void postOnMediaHandler(@NonNull Runnable r) {
