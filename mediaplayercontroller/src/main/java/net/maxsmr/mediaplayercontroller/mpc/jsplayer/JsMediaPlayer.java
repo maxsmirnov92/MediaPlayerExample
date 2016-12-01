@@ -125,8 +125,9 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
                             mScriptExecutor.execute("addCallbacks()");
                             mPageLoaded = true;
                             if (!isReleased()) {
+                                boolean open = mScheduleOpenDataSource || mLastModeToOpen != PlayMode.NONE;
                                 clearDataSource(false);
-                                if (mScheduleOpenDataSource) {
+                                if (open) {
                                     mScheduleOpenDataSource = false;
                                     logger.debug("openDataSource() was scheduled (after page loaded), opening...");
                                     openDataSource();
@@ -470,6 +471,30 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
         }
     }
 
+    public boolean isAudioSpecified() {
+        synchronized (mLock) {
+            return mPlayMode == PlayMode.AUDIO && mContentUri != null;
+        }
+    }
+
+    public boolean isVideoSpecified() {
+        synchronized (mLock) {
+            return mPlayMode == PlayMode.VIDEO && mContentUri != null;
+        }
+    }
+
+    public boolean isPictureSpecified() {
+        synchronized (mLock) {
+            return mPlayMode == PlayMode.PICTURE && mContentUri != null;
+        }
+    }
+
+    public boolean isPageSpecified() {
+        synchronized (mLock) {
+            return mPlayMode == PlayMode.PAGE && mContentUri != null;
+        }
+    }
+
     @Override
     public boolean isPlayModeSupported(@NonNull PlayMode playMode) {
         return playMode == PlayMode.AUDIO || playMode == PlayMode.VIDEO || playMode == PlayMode.PICTURE || playMode == PlayMode.PAGE;
@@ -561,7 +586,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     }
 
     @MainThread
-    private void clearDataSource(final boolean clearTargetState) {
+    protected void clearDataSource(final boolean clearTargetState) {
         synchronized (mLock) {
             logger.debug("clearDataSource(), clearTargetState=" + clearTargetState);
             cancelResetCallback();

@@ -3,7 +3,7 @@ apply plugin: 'maven'
 
 def groupId = "net.maxsmr"
 def artifactId = "mediaplayercontroller"
-def version = "1.6.5"
+def version = "1.6.5.1"
 
 def releaseDir = "${buildDir}/release"
 

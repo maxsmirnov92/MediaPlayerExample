@@ -808,7 +808,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         synchronized (mLock) {
             logger.info("onPrepared(), " +
                     "target content: " + (mContentUri != null ? mContentUri : mContentFileDescriptor) + ", opened content: " + (mLastContentUriToOpen != null ? mLastContentUriToOpen : mLastAssetFileDescriptorToOpen) +
-                    " | target play mode: " + mPlayMode + ", last play mode: " + mLastModeToOpen);
+                    " | target play mode: " + mPlayMode + ", opened play mode: " + mLastModeToOpen);
 
             checkReleased();
             cancelResetCallback();

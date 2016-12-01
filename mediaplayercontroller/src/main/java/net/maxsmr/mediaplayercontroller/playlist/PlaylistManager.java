@@ -335,7 +335,20 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
     public void setLoopPlaylist(boolean toggle) {
         synchronized (mTracks) {
             checkReleased();
-            mLoopPlaylist = toggle;
+            if (toggle != mLoopPlaylist) {
+                mLoopPlaylist = toggle;
+                if (hasCurrentTrack()) {
+                    T track = getCurrentTrack();
+                    boolean schedule = track != null &&
+                            track.playMode != BaseMediaPlayerController.PlayMode.NONE && track.playMode.isInfiniteMode && (!mLoopPlaylist || getTracksCount() > 1);
+                    if (schedule) {
+                        if (mTrackResetFuture == null || mTrackResetFuture.isCancelled() || mTrackResetFuture.isDone()) {
+                            logger.debug("scheduling reset callback (play timeout) after " + track.duration + " ms");
+                            mTrackResetFuture = mPlayerController.scheduleOnExecutor(mTrackResetRunnable, track.duration);
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -640,7 +653,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         mPlayerController.resume();
         boolean schedule = false;
         if (track.duration != AbsPlaylistItem.DURATION_NOT_SPECIFIED) {
-            schedule = /*!mLoopPlaylist ||*/ getTracksCount() > 1;
+            schedule = !mLoopPlaylist || getTracksCount() > 1;
             if (track.playMode != BaseMediaPlayerController.PlayMode.NONE && !track.playMode.isInfiniteMode) {
                 if (track instanceof UriPlaylistItem) {
                     Uri uri = !TextUtils.isEmpty(((UriPlaylistItem) track).uri) ? Uri.parse(fixUrl(((UriPlaylistItem) track).uri)) : null;
