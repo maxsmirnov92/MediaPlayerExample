@@ -11,7 +11,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import ru.maxsmr.mediaplayerexample.app.logger.ConfigureLog4J;
-import ru.maxsmr.mediaplayerexample.player.MediaPlayerFactory;
 
 public class MediaPlayerExampleApp extends Application {
 
@@ -33,8 +32,8 @@ public class MediaPlayerExampleApp extends Application {
         super.onCreate();
         logger.debug("onCreate()");
         applyLog4JConf();
-        MediaPlayerFactory.initInstance(this);
-
+        MediaPlayerFacade.initInstance(this);
+        MediaPlayerFacade.initInstance(this);
         MediaPlayerFacade.getInstance().create(PLAYER_ALIAS);
         PlaylistManagerFacade.getInstance().create(PLAYER_ALIAS, MediaPlayerFacade.getInstance().get(PLAYER_ALIAS), UriPlaylistItem.class);
 //        PlaylistManagerFacade.getInstance().get(PLAYER_ALIAS).addAcceptableFileMimeTypeParts("application/ogg");

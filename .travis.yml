@@ -4,8 +4,8 @@ android:
   components:
     - platform-tools
     - tools
-    - android-23
-    - build-tools-23.0.3
+    - android-24
+    - build-tools-24.0.3
     - extra-android-m2repository
 
 script:
@@ -15,7 +15,7 @@ script:
     - ./gradlew generateBintrayJson
 
 jdk:
-  - oraclejdk7
+  - oraclejdk8
 
 cache:
   directories:

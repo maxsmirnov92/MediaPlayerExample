@@ -28,6 +28,15 @@ public final class MediaPlayerFacade {
         return sInstance;
     }
 
+    public static void releaseInstance() {
+        if (sInstance != null) {
+            for (String alias : sInstance.mCached.keySet()) {
+                sInstance.remove(alias);
+            }
+            sInstance.mCached.clear();
+        }
+    }
+
     public MediaPlayerFacade(@NonNull Context context) {
         mContext = context;
     }
@@ -41,7 +50,7 @@ public final class MediaPlayerFacade {
     @NonNull
     public MediaPlayerController create(String alias) {
         MediaPlayerController mpc = get(alias);
-        if (mpc == null) {
+        if (mpc == null || mpc.isReleased()) {
             mpc = new MediaPlayerController(mContext);
         }
         mCached.put(alias, mpc);
@@ -50,25 +59,22 @@ public final class MediaPlayerFacade {
 
     @Nullable
     public MediaPlayerController get(String alias) {
-        return mCached.get(alias);
+        MediaPlayerController c = mCached.get(alias);
+        if (c != null && c.isReleased()) {
+            c = null;
+        }
+        return c;
     }
 
     @Nullable
     public MediaPlayerController remove(String alias) {
         MediaPlayerController mpc = mCached.remove(alias);
-        if (mpc != null) {
+        if (mpc != null && !mpc.isReleased()) {
             mpc.release();
         }
         return mpc;
     }
 
-    public static void releaseInstance() {
-        if (sInstance != null) {
-            for (MediaPlayerController mpc : sInstance.mCached.values()) {
-                mpc.release();
-            }
-            sInstance.mCached.clear();
-        }
-    }
+
 
 }

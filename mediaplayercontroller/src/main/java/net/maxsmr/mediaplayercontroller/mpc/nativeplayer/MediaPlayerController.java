@@ -236,16 +236,23 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
     @MainThread
     public void setVideoView(SurfaceView videoView) {
 
-        if (mVideoView != null) {
-            mVideoView.getHolder().removeCallback(mSHCallback);
-        }
+        if (videoView != mVideoView) {
 
-        mVideoView = videoView;
-        mVideoSizeChangedListener.onVideoSizeChanged(mMediaPlayer, 0, 0);
+            if (isVideoSpecified() && isInPlaybackState()) {
+                stop();
+            }
 
-        if (mVideoView != null) {
-            mVideoView.getHolder().setKeepScreenOn(true);
-            mVideoView.getHolder().addCallback(mSHCallback);
+            if (mVideoView != null) {
+                mVideoView.getHolder().removeCallback(mSHCallback);
+            }
+
+            mVideoView = videoView;
+            mVideoSizeChangedListener.onVideoSizeChanged(mMediaPlayer, 0, 0);
+
+            if (mVideoView != null) {
+                mVideoView.getHolder().setKeepScreenOn(true);
+                mVideoView.getHolder().addCallback(mSHCallback);
+            }
         }
     }
 

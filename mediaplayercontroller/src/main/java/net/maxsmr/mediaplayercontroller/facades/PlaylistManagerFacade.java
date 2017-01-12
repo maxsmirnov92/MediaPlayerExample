@@ -29,8 +29,8 @@ public final class PlaylistManagerFacade {
 
     public static void releaseInstance() {
         if (sInstance != null) {
-            for (PlaylistManager<?, ?> manager : sInstance.mCached.values()) {
-                manager.release();
+            for (String alias : sInstance.mCached.keySet()) {
+                sInstance.remove(alias);
             }
             sInstance.mCached.clear();
         }
@@ -53,13 +53,17 @@ public final class PlaylistManagerFacade {
     @SuppressWarnings("unchecked")
     @Nullable
     public <C extends BaseMediaPlayerController, I extends AbsPlaylistItem> PlaylistManager<C, I> get(String alias) throws ClassCastException {
-        return (PlaylistManager<C, I>) mCached.get(alias);
+        PlaylistManager<?, ?> manager = mCached.get(alias);
+        if (manager!= null && manager.isReleased()) {
+            manager = null;
+        }
+        return (PlaylistManager<C, I>) manager;
     }
 
     @Nullable
     public PlaylistManager<?, ?> remove(String alias) {
         PlaylistManager<?, ?> manager = mCached.remove(alias);
-        if (manager != null) {
+        if (manager != null && !manager.isReleased()) {
             manager.release();
         }
         return manager;
