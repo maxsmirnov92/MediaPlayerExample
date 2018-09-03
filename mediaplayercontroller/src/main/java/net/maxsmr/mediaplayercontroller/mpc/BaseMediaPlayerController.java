@@ -26,13 +26,12 @@ import net.maxsmr.commonutils.android.media.MetadataRetriever;
 import net.maxsmr.commonutils.data.CompareUtils;
 import net.maxsmr.commonutils.data.FileHelper;
 import net.maxsmr.commonutils.data.Observable;
+import net.maxsmr.commonutils.logger.BaseLogger;
+import net.maxsmr.commonutils.logger.holder.BaseLoggerHolder;
 import net.maxsmr.mediaplayercontroller.mpc.receivers.AudioFocusChangeReceiver;
 import net.maxsmr.mediaplayercontroller.mpc.receivers.HeadsetPlugBroadcastReceiver;
 import net.maxsmr.mediaplayercontroller.mpc.receivers.NoisyAudioBroadcastReceiver;
 import net.maxsmr.tasksutils.ScheduledThreadPoolExecutorManager;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -53,6 +52,8 @@ import java.util.concurrent.TimeUnit;
 
 public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerController.OnErrorListener.MediaError> implements MediaController.MediaPlayerControl {
 
+    protected final BaseLogger logger = BaseLoggerHolder.getInstance().getLogger(getClass());
+
     public final static long DEFAULT_PREPARE_RESET_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(15);
 
     public final static long DEFAULT_NOTIFY_PLAYBACK_TIME_INTERVAL_MS = TimeUnit.SECONDS.toMillis(1);
@@ -67,16 +68,14 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     public static final int VOLUME_NOT_SET = -1;
 
     protected BaseMediaPlayerController(@NonNull Context context) {
-        mContext = context;
-        init();
+        this.context = context;
+        this.init();
     }
-
-    protected final Logger logger = LoggerFactory.getLogger(getClass());
 
     @NonNull
     protected final Object mLock = new Object();
 
-    protected Context mContext;
+    protected Context context;
 
     protected boolean mReleasingPlayer = false;
 
@@ -168,7 +167,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     private final AudioFocusChangeReceiver.OnAudioFocusChangeListener mAudioFocusChangeListener = new AudioFocusChangeReceiver.OnAudioFocusChangeListener() {
         @Override
         public void onAudioFocusGain() {
-            logger.debug("onAudioFocusGain()");
+            logger.d("onAudioFocusGain()");
             // resume playback
             if (mVolumeLeftWhenPrepared != VOLUME_NOT_SET && mVolumeRightWhenPrepared != VOLUME_NOT_SET) {
                 setVolume(mVolumeLeftWhenPrepared, mVolumeRightWhenPrepared);
@@ -178,31 +177,31 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
 
         @Override
         public void onAudioFocusLoss() {
-            logger.debug("onAudioFocusLoss()");
+            logger.d("onAudioFocusLoss()");
             if (mReactOnExternalEvents) {
                 // Lost focus for an unbounded amount of time: stop playback and release media player
                 suspend();
             } else {
-                logger.debug("reacting on external events is disabled");
+                logger.d("reacting on external events is disabled");
             }
         }
 
         @Override
         public void onAudioFocusLossTransient() {
-            logger.debug("onAudioFocusLossTransient()");
+            logger.d("onAudioFocusLossTransient()");
             if (mReactOnExternalEvents) {
                 // Lost focus for a short time, but we have to stop
                 // playback. We don't release the media player because playback
                 // is likely to resume
                 handleInterruptEventStart();
             } else {
-                logger.debug("reacting on external events is disabled");
+                logger.d("reacting on external events is disabled");
             }
         }
 
         @Override
         public void onAudioFocusLossTransientCanDuck() {
-            logger.debug("onAudioFocusLossTransientCanDuck()");
+            logger.d("onAudioFocusLossTransientCanDuck()");
             if (mReactOnExternalEvents) {
                 // Lost focus for a short time, but it's ok to keep playing
                 // at an attenuated level
@@ -212,7 +211,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
                 mVolumeLeftWhenPrepared = previousVolumeLeft;
                 mVolumeRightWhenPrepared = previousVolumeRight;
             } else {
-                logger.debug("reacting on external events is disabled");
+                logger.d("reacting on external events is disabled");
             }
         }
     };
@@ -222,11 +221,11 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
 
         @Override
         public void onNoisyAudio() {
-            logger.debug("onNoisyAudio()");
+            logger.d("onNoisyAudio()");
             if (mReactOnExternalEvents) {
                 stop();
             } else {
-                logger.debug("reacting on external events is disabled");
+                logger.d("reacting on external events is disabled");
             }
         }
     };
@@ -236,17 +235,17 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
 
         @Override
         public void onHeadphonesPlugged(boolean hasMicrophone) {
-            logger.debug("onHeadphonesPlugged(), hasMicrophone=" + hasMicrophone);
+            logger.d("onHeadphonesPlugged(), hasMicrophone=" + hasMicrophone);
             handleInterruptEventEnd();
         }
 
         @Override
         public void onHeadphonesUnplugged() {
-            logger.debug("onHeadphonesUnplugged()");
+            logger.d("onHeadphonesUnplugged()");
             if (mReactOnExternalEvents) {
                 handleInterruptEventStart();
             } else {
-                logger.debug("reacting on external events is disabled");
+                logger.d("reacting on external events is disabled");
             }
         }
     };
@@ -256,12 +255,12 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
 
         @Override
         public void onCallStateChanged(int state, String incomingNumber) {
-            logger.debug("onCallStateChanged(), state=" + state + ", incomingNumber=" + incomingNumber);
+            logger.d("onCallStateChanged(), state=" + state + ", incomingNumber=" + incomingNumber);
             if (state == TelephonyManager.CALL_STATE_RINGING) {
                 if (mReactOnExternalEvents) {
                     handleInterruptEventStart();
                 } else {
-                    logger.debug("reacting on external events is disabled");
+                    logger.d("reacting on external events is disabled");
                 }
             } else if (state == TelephonyManager.CALL_STATE_IDLE) {
                 handleInterruptEventEnd();
@@ -279,12 +278,12 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
 
     private void registerReceivers() {
         mAudioFocusChangeReceiver.getAudioFocusChangeObservable().registerObserver(mAudioFocusChangeListener);
-        mNoisyBroadcastReceiver.register(mContext);
+        mNoisyBroadcastReceiver.register(context);
         mNoisyBroadcastReceiver.getNoisyAudioObservable().registerObserver(mNoisyAudioListener);
-        mHeadsetPlugBroadcastReceiver.register(mContext);
+        mHeadsetPlugBroadcastReceiver.register(context);
         mHeadsetPlugBroadcastReceiver.getHeadsetStateChangedObservable().registerObserver(mHeadsetStateChangeListener);
-        if (ContextCompat.checkSelfPermission(mContext, "android.permission.READ_PHONE_STATE") == PackageManager.PERMISSION_GRANTED) {
-            final TelephonyManager telephonyManager = (TelephonyManager) mContext.getSystemService(Activity.TELEPHONY_SERVICE);
+        if (ContextCompat.checkSelfPermission(context, "android.permission.READ_PHONE_STATE") == PackageManager.PERMISSION_GRANTED) {
+            final TelephonyManager telephonyManager = (TelephonyManager) context.getSystemService(Activity.TELEPHONY_SERVICE);
             if (telephonyManager != null) {
                 telephonyManager.listen(mPhoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
             }
@@ -294,11 +293,11 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     private void unregisterReceivers() {
         mAudioFocusChangeReceiver.getAudioFocusChangeObservable().unregisterObserver(mAudioFocusChangeListener);
         mNoisyBroadcastReceiver.getNoisyAudioObservable().unregisterObserver(mNoisyAudioListener);
-        mNoisyBroadcastReceiver.unregister(mContext);
+        mNoisyBroadcastReceiver.unregister(context);
         mHeadsetPlugBroadcastReceiver.getHeadsetStateChangedObservable().unregisterObserver(mHeadsetStateChangeListener);
-        mHeadsetPlugBroadcastReceiver.unregister(mContext);
-        if (ContextCompat.checkSelfPermission(mContext, "android.permission.READ_PHONE_STATE") == PackageManager.PERMISSION_GRANTED) {
-            final TelephonyManager telephonyManager = (TelephonyManager) mContext.getSystemService(Activity.TELEPHONY_SERVICE);
+        mHeadsetPlugBroadcastReceiver.unregister(context);
+        if (ContextCompat.checkSelfPermission(context, "android.permission.READ_PHONE_STATE") == PackageManager.PERMISSION_GRANTED) {
+            final TelephonyManager telephonyManager = (TelephonyManager) context.getSystemService(Activity.TELEPHONY_SERVICE);
             if (telephonyManager != null) {
                 telephonyManager.listen(mPhoneStateListener, PhoneStateListener.LISTEN_NONE);
             }
@@ -308,7 +307,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     @NonNull
     public final Context getContext() {
         checkReleased();
-        return mContext;
+        return context;
     }
 
     @NonNull
@@ -345,12 +344,12 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
 
     protected final boolean requestAudioFocus() {
         checkReleased();
-        return mAudioFocusChangeReceiver.requestFocus(mContext);
+        return mAudioFocusChangeReceiver.requestFocus(context);
     }
 
     protected final boolean abandonAudioFocus() {
         checkReleased();
-        return mAudioFocusChangeReceiver.abandonFocus(mContext);
+        return mAudioFocusChangeReceiver.abandonFocus(context);
     }
 
     @NonNull
@@ -366,7 +365,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
             if (newState != mCurrentState) {
                 State oldState = mCurrentState;
                 mCurrentState = newState;
-                logger.info("current state: " + mCurrentState);
+                logger.i("current state: " + mCurrentState);
                 mStateChangedObservable.dispatchCurrentStateChanged(oldState);
             }
         }
@@ -384,7 +383,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
             checkReleased();
             if (newState != mTargetState) {
                 mTargetState = newState;
-                logger.info("target state: " + mTargetState);
+                logger.i("target state: " + mTargetState);
                 mStateChangedObservable.dispatchTargetStateChanged();
             }
         }
@@ -508,7 +507,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
 
     public void setContentUri(@NonNull PlayMode playMode, @Nullable Uri contentUri, @Nullable Map<String, String> headers) {
         synchronized (mLock) {
-            logger.debug("setContentUri(), playMode=" + playMode + ", contentUri=" + contentUri + ", headers=" + headers);
+            logger.d("setContentUri(), playMode=" + playMode + ", contentUri=" + contentUri + ", headers=" + headers);
 
             checkReleased();
 
@@ -550,7 +549,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
 
     public void setContentFd(@NonNull PlayMode playMode, @Nullable AssetFileDescriptor contentFd) {
         synchronized (mLock) {
-            logger.debug("setContentFd(), playMode=" + playMode + ", contentFd=" + contentFd);
+            logger.d("setContentFd(), playMode=" + playMode + ", contentFd=" + contentFd);
 
             checkReleased();
 
@@ -592,9 +591,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     }
 
     public void setContentRawId(@NonNull Context context, @NonNull PlayMode playMode, @RawRes int contentRawResId) {
-        if (contentRawResId > 0) {
             setContentFd(playMode, context.getResources().openRawResourceFd(contentRawResId));
-        }
     }
 
     public void setContentAsset(@NonNull Context context, @NonNull PlayMode playMode, String assetName) {
@@ -603,7 +600,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
             fd = context.getAssets().openNonAssetFd(assetName);
         } catch (IOException e) {
             e.printStackTrace();
-            logger.error("can't open asset: " + assetName);
+            logger.e("can't open asset: " + assetName);
         }
         if (fd != null) {
             setContentFd(playMode, fd);
@@ -619,7 +616,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     @Nullable
     public MetadataRetriever.MediaMetadata getCurrentTrackMetatada() {
         return (mContentUri != null && (TextUtils.isEmpty(mContentUri.getScheme()) || mContentUri.getScheme().equalsIgnoreCase(ContentResolver.SCHEME_FILE)) ?
-                MetadataRetriever.extractMetadata(mContext, mContentUri) :
+                MetadataRetriever.extractMetadata(context, mContentUri) :
                 (mContentFileDescriptor != null ? MetadataRetriever.extractMetadata(mContentFileDescriptor.getFileDescriptor()) : null));
     }
 
@@ -631,7 +628,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     protected final void cancelResetCallback() {
         if (mResetFuture != null) {
             if (!mResetFuture.isCancelled() && !mResetFuture.isDone()) {
-//                logger.debug("cancelling reset callback (prepare timeout)...");
+//                logger.d("cancelling reset callback (prepare timeout)...");
                 mResetFuture.cancel(true);
             }
             mResetFuture = null;
@@ -641,7 +638,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     @CallSuper
     public void setLooping(boolean toggle) {
         synchronized (mLock) {
-            logger.debug("setLooping(), toggle=" + toggle);
+            logger.d("setLooping(), toggle=" + toggle);
             mLoopWhenPreparing = toggle;
         }
     }
@@ -733,7 +730,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     @CallSuper
     protected void beforeOpenDataSource() {
         synchronized (mLock) {
-            logger.debug("beforeOpenDataSource()");
+            logger.d("beforeOpenDataSource()");
             checkReleased();
             onBufferingUpdate(0);
             setControlsToDefault();
@@ -753,7 +750,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     public abstract void pause();
 
     public final void resume() {
-        logger.debug("resume()");
+        logger.d("resume()");
         if (isContentSpecified()) {
             if (!(isPreparing() || isInPlaybackState())) {
                 openDataSource();
@@ -762,7 +759,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     }
 
     public final void suspend() {
-        logger.debug("suspend()");
+        logger.d("suspend()");
         releasePlayer(false);
     }
 
@@ -790,7 +787,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     @CallSuper
     public void release() {
         synchronized (mLock) {
-            logger.debug("release()");
+            logger.d("release()");
             if (isReleased()) {
                 throw new IllegalStateException(BaseMediaPlayerController.class.getSimpleName() + " was already released");
             }
@@ -806,7 +803,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     @CallSuper
     protected boolean onPrepared() {
         synchronized (mLock) {
-            logger.info("onPrepared(), " +
+            logger.i("onPrepared(), " +
                     "target content: " + (mContentUri != null ? mContentUri : mContentFileDescriptor) + ", opened content: " + (mLastContentUriToOpen != null ? mLastContentUriToOpen : mLastAssetFileDescriptorToOpen) +
                     " | target play mode: " + mPlayMode + ", opened play mode: " + mLastModeToOpen);
 
@@ -816,7 +813,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
             boolean result = true;
 
             if (!isContentSpecified()) {
-                logger.error("can't open data source: content is not specified");
+                logger.e("can't open data source: content is not specified");
                 releasePlayer(true);
                 result = false;
             }
@@ -842,11 +839,11 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
 
                 if (reopen) {
                     if (mContentUri != null) {
-                        logger.warn("last uri (" + mLastContentUriToOpen + ") or descriptor (" + mLastAssetFileDescriptorToOpen + ") to open and target (" + mContentUri + ") don't match");
+                        logger.w("last uri (" + mLastContentUriToOpen + ") or descriptor (" + mLastAssetFileDescriptorToOpen + ") to open and target (" + mContentUri + ") don't match");
                     } else if (mContentFileDescriptor != null) {
-                        logger.warn("last uri (" + mLastContentUriToOpen + ") or descriptor (" + mLastAssetFileDescriptorToOpen + ") to open and target (" + mContentFileDescriptor + ") don't match");
+                        logger.w("last uri (" + mLastContentUriToOpen + ") or descriptor (" + mLastAssetFileDescriptorToOpen + ") to open and target (" + mContentFileDescriptor + ") don't match");
                     }
-                    logger.debug("releasing and reopening...");
+                    logger.d("releasing and reopening...");
                     releasePlayer(false);
                     openDataSource();
                     result = false;
@@ -860,7 +857,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     @CallSuper
     protected void onBufferingUpdate(int percent) {
         synchronized (mLock) {
-            logger.debug("onBufferingUpdate(), percent=" + percent);
+            logger.d("onBufferingUpdate(), percent=" + percent);
             checkReleased();
             if (percent != mCurrentBufferPercentage) {
                 mCurrentBufferPercentage = percent;
@@ -872,7 +869,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     @CallSuper
     protected void onCompletion() {
         synchronized (mLock) {
-            logger.info("onCompletion()");
+            logger.i("onCompletion()");
             checkReleased();
             mCompletionObservable.dispatchCompleted();
         }
@@ -884,7 +881,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     @CallSuper
     protected boolean onError(@NonNull E error) {
         synchronized (mLock) {
-            logger.error("onError(), error=" + error);
+            logger.e("onError(), error=" + error);
             checkReleased();
             mErrorObservable.dispatchError(error);
             return true;
@@ -951,7 +948,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
             }
 
             private void doUpdate() {
-//                logger.debug("doUpdate()");
+//                logger.d("doUpdate()");
                 if (isPlaying()) {
 
                     final long currentDuration = getDuration();
@@ -999,7 +996,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
 
     protected void handleInterruptEventStart() {
         synchronized (mLock) {
-            logger.debug("handleInterruptEventStart()");
+            logger.d("handleInterruptEventStart()");
             if (isPreparing() || isPlaying()) {
                 State previousState = getCurrentState();
                 State previousTargetState = getTargetState();
@@ -1014,7 +1011,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
 
     protected void handleInterruptEventEnd() {
         synchronized (mLock) {
-            logger.debug("handleInterruptEventEnd()");
+            logger.d("handleInterruptEventEnd()");
             if (mInterrupted && mTargetState == State.PLAYING) {
                 start();
             }
@@ -1050,19 +1047,19 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
             postOnMediaHandler(new Runnable() {
                 @Override
                 public void run() {
-                    logger.debug("run()");
+                    logger.d("run()");
                     r.run();
                     latch.countDown();
                 }
             });
-            logger.debug("await start");
+            logger.d("await start");
             try {
                 latch.await();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 e.printStackTrace();
             } finally {
-                logger.debug("await end");
+                logger.d("await end");
             }
         }
     }
@@ -1111,7 +1108,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     protected class PlaybackTimeUpdateTimeObservable extends Observable<OnPlaybackTimeUpdateTimeListener> {
 
         void dispatchPlaybackTimeUpdated() {
-            synchronized (mObservers) {
+            synchronized (observers) {
                 for (OnPlaybackTimeUpdateTimeListener l : copyOfObservers()) {
                     l.onPlaybackTimeUpdateTime(getCurrentPosition(), getDuration());
                 }
@@ -1127,7 +1124,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     protected static class OnBufferingUpdateObservable extends Observable<OnBufferingUpdateListener> {
 
         void dispatchOnOnBufferingUpdate(int percentage) {
-            synchronized (mObservers) {
+            synchronized (observers) {
                 for (OnBufferingUpdateListener l : copyOfObservers()) {
                     l.onBufferingUpdate(percentage);
                 }
@@ -1146,7 +1143,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     protected class OnCompletionObservable extends Observable<OnCompletionListener> {
 
         void dispatchCompleted() {
-            synchronized (mObservers) {
+            synchronized (observers) {
                 for (OnCompletionListener l : copyOfObservers()) {
                     l.onCompletion(isLooping());
                 }
@@ -1179,7 +1176,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     protected static class OnErrorObservable<E extends OnErrorListener.MediaError> extends Observable<OnErrorListener<E>> {
 
         void dispatchError(@NonNull E error) {
-            synchronized (mObservers) {
+            synchronized (observers) {
                 for (OnErrorListener<E> l : copyOfObservers()) {
                     l.onError(error);
                 }
@@ -1199,7 +1196,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
     protected class OnStateChangedObservable extends Observable<OnStateChangedListener> {
 
         void dispatchBeforeOpenDataSource() {
-            synchronized (mObservers) {
+            synchronized (observers) {
                 for (OnStateChangedListener l : copyOfObservers()) {
                     l.onBeforeOpenDataSource();
                 }
@@ -1207,7 +1204,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         }
 
         void dispatchCurrentStateChanged(@NonNull State previousState) {
-            synchronized (mObservers) {
+            synchronized (observers) {
                 for (OnStateChangedListener l : copyOfObservers()) {
                     l.onCurrentStateChanged(mCurrentState, previousState);
                 }
@@ -1215,7 +1212,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         }
 
         void dispatchTargetStateChanged() {
-            synchronized (mObservers) {
+            synchronized (observers) {
                 for (OnStateChangedListener l : copyOfObservers()) {
                     l.onTargetStateChanged(mTargetState);
                 }

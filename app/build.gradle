@@ -1,8 +1,8 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 24
-    buildToolsVersion "24.0.3"
+    compileSdkVersion sdkVersion
+    buildToolsVersion buildToolsVersion_
 
     Properties hardcodeProperties = new Properties()
     if (file("hardcode.properties").exists()) {
@@ -12,10 +12,13 @@ android {
     final hardcodeVideoUrl = hardcodeProperties["VIDEO_URL"] == null ? "" : hardcodeProperties["VIDEO_URL"]
     final hardcodeUrlChoice = hardcodeProperties["URL_TO_USE"] == null ? "" : hardcodeProperties["URL_TO_USE"]
 
+    sourceCompatibility = sourceCompatibilityVersion
+    targetCompatibility = sourceCompatibilityVersion
+
     defaultConfig {
         applicationId "ru.maxsmr.mediaplayerexample"
-        minSdkVersion 15
-        targetSdkVersion 24
+        minSdkVersion minSdkVersion_
+        targetSdkVersion sdkVersion
         versionCode 1
         versionName "1.0"
 
@@ -29,17 +32,16 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
 }
 
 dependencies {
-    compile fileTree(dir: 'libs', include: ['*.jar'])
-    testCompile 'junit:junit:4.12'
-    compile 'com.android.support:appcompat-v7:24.0.0'
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
 
-    compile 'de.mindpipe.android:android-logging-log4j:1.0.3'
-
-    compile files('libs/FileDialog-0.1.jar')
-
-    compile project(':mediaplayercontroller')
-//    compile 'net.maxsmr.mediaplayercontroller:1.0'
+//    implementation project(':mediaplayercontroller')
+    implementation "net.maxsmr:mediaplayercontroller:$mediaPlayerControllerVersion"
 }

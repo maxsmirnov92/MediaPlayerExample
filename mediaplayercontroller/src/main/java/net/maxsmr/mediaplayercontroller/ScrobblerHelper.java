@@ -7,17 +7,16 @@ import android.support.annotation.Nullable;
 import android.text.TextUtils;
 
 import net.maxsmr.commonutils.android.media.MetadataRetriever;
+import net.maxsmr.commonutils.logger.BaseLogger;
+import net.maxsmr.commonutils.logger.holder.BaseLoggerHolder;
 import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public final class ScrobblerHelper {
 
-    private static final Logger logger = LoggerFactory.getLogger(ScrobblerHelper.class);
+    private static final BaseLogger logger = BaseLoggerHolder.getInstance().getLogger(ScrobblerHelper.class);
 
     public static ScrobblerHelper attach(@NonNull Context context, @NonNull BaseMediaPlayerController<?> mpc) {
-        logger.debug("attach(), mpc=" + mpc);
+        logger.d("attach(), mpc=" + mpc);
         return new ScrobblerHelper(context, mpc);
     }
 
@@ -57,7 +56,7 @@ public final class ScrobblerHelper {
     }
 
     private synchronized void notifyScrobblerStateChanged(@NonNull BaseMediaPlayerController.State newState, @NonNull BaseMediaPlayerController.State oldState, @Nullable MetadataRetriever.MediaMetadata metadata, long position) {
-        logger.debug("notifyScrobblerStateChanged(), newState=" + newState + ", oldState=" + oldState + ", metadata=" + metadata + ", position=" + position);
+        logger.d("notifyScrobblerStateChanged(), newState=" + newState + ", oldState=" + oldState + ", metadata=" + metadata + ", position=" + position);
 
         if (mMpc == null) {
             throw new IllegalStateException(BaseMediaPlayerController.class.getSimpleName() + " is not attached");
@@ -165,7 +164,7 @@ public final class ScrobblerHelper {
 
     /** must be called when done with scrobbling */
     public void detach() {
-        logger.debug("detach()");
+        logger.d("detach()");
         notifyScrobblerIdleState();
         disableScrobbling();
         mMpc.getStateChangedObservable().unregisterObserver(mCallbacks);

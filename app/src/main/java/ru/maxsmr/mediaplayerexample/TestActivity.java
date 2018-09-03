@@ -25,7 +25,6 @@ import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -46,6 +45,8 @@ import android.widget.Toast;
 
 import net.maxsmr.commonutils.android.gui.GuiUtils;
 import net.maxsmr.commonutils.data.FileHelper;
+import net.maxsmr.commonutils.logger.BaseLogger;
+import net.maxsmr.commonutils.logger.holder.BaseLoggerHolder;
 import net.maxsmr.mediaplayercontroller.ScrobblerHelper;
 import net.maxsmr.mediaplayercontroller.facades.MediaPlayerFacade;
 import net.maxsmr.mediaplayercontroller.facades.PlaylistManagerFacade;
@@ -56,9 +57,6 @@ import net.maxsmr.mediaplayercontroller.playlist.item.AbsPlaylistItem;
 import net.maxsmr.mediaplayercontroller.playlist.item.UriPlaylistItem;
 
 import org.ngweb.android.api.filedialog.FileDialog;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.w3c.dom.Text;
 
 import java.io.File;
 import java.net.MalformedURLException;
@@ -73,7 +71,7 @@ import ru.maxsmr.mediaplayerexample.app.MediaPlayerExampleApp;
 
 public class TestActivity extends AppCompatActivity implements SurfaceHolder.Callback, MediaPlayerController.OnStateChangedListener, MediaPlayerController.OnErrorListener<MediaPlayerController.MediaError>, MediaPlayerController.OnVideoSizeChangedListener, MediaPlayerController.OnPlaybackTimeUpdateTimeListener, PlaylistManager.OnTracksSetListener<UriPlaylistItem>, SeekBar.OnSeekBarChangeListener {
 
-    private static final Logger logger = LoggerFactory.getLogger(TestActivity.class);
+    private static final BaseLogger logger = BaseLoggerHolder.getInstance().getLogger(TestActivity.class);
 
     private MediaPlayerController mediaPlayerController;
     private PlaylistManager<MediaPlayerController, UriPlaylistItem> playlistManager;
@@ -114,7 +112,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     }
 
     private void initSpinner() {
-        navigationSpinner = (Spinner) findViewById(R.id.action_bar_spinner);
+        navigationSpinner = findViewById(R.id.action_bar_spinner);
         SpinnerAdapter spinnerAdapter = ArrayAdapter.createFromResource(getApplicationContext(), R.array.actionbar_navigation_items, android.R.layout.simple_list_item_1);
         navigationSpinner.setAdapter(spinnerAdapter);
 //        navigationSpinner.setOnItemSelectedListener(this);
@@ -282,7 +280,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        logger.debug("onCreate()");
+        logger.d("onCreate()");
         setContentView(R.layout.activity_test);
         initToolbar();
         initSpinner();
@@ -301,7 +299,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     @Override
     protected void onResume() {
         super.onResume();
-        logger.debug("onResume()");
+        logger.d("onResume()");
         if (mediaPlayerController.isVideoSpecified() && mediaPlayerController.getTargetState() == MediaPlayerController.State.PLAYING) {
             mediaPlayerController.start();
         }
@@ -311,7 +309,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     @Override
     protected void onStop() {
         super.onStop();
-        logger.debug("onStop()");
+        logger.d("onStop()");
         if (mediaPlayerController.isVideoSpecified()) {
             mediaPlayerController.pause();
         }
@@ -320,7 +318,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        logger.debug("onDestroy()");
+        logger.d("onDestroy()");
 
         hideFileSelectDialog();
         hideUrlInputDialog();
@@ -345,7 +343,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        logger.debug("onKeyDown(), keyCode=" + keyCode + ", event=" + event);
+        logger.d("onKeyDown(), keyCode=" + keyCode + ", event=" + event);
 
         boolean isKeyCodeSupported =
                 keyCode != KeyEvent.KEYCODE_VOLUME_UP &&
@@ -406,7 +404,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
     @Override
     public void onCurrentStateChanged(@NonNull final MediaPlayerController.State currentState, @NonNull MediaPlayerController.State previousState) {
-        logger.info("onCurrentStateChanged(), currentState=" + currentState + ", previousState=" + previousState);
+        logger.i("onCurrentStateChanged(), currentState=" + currentState + ", previousState=" + previousState);
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -424,7 +422,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
 //        if (currentState == MediaPlayerController.State.PLAYING) {
 //            Uri uri = mediaPlayerController.isAudioSpecified() ? mediaPlayerController.getAudioUri() : mediaPlayerController.getVideoUri();
 //            if (uri != null) {
-//                logger.debug("metadata: " + MetadataRetriever.extractMetaData(this, uri, null));
+//                logger.d("metadata: " + MetadataRetriever.extractMetaData(this, uri, null));
 //                Bitmap albumArt = MetadataRetriever.extractAlbumArt(this, new Uri.Builder().scheme(ContentResolver.SCHEME_CONTENT).appendEncodedPath(uri.getPath()).build());
 //                if (albumArt != null) {
 //                    albumArt.recycle();
@@ -435,7 +433,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
     @Override
     public void onTargetStateChanged(@NonNull MediaPlayerController.State targetState) {
-        logger.info("onTargetStateChanged(), targetState=" + targetState);
+        logger.i("onTargetStateChanged(), targetState=" + targetState);
     }
 
     private void invalidateByCurrentState() {
@@ -486,7 +484,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
                         if (directory != null && FileHelper.isDirExists(directory.getAbsolutePath())) {
                             lastSelectedDirectory = directory;
 
-                            Set<File> folderFiles = FileHelper.getFiles(Collections.singleton(directory), FileHelper.GetMode.FILES, true, null, null);
+                            Set<File> folderFiles = FileHelper.getFiles(directory, FileHelper.GetMode.FILES, new FileHelper.FileComparator(Collections.singletonMap(FileHelper.FileComparator.SortOption.NAME, true)), null, FileHelper.DEPTH_UNLIMITED);
                             List<UriPlaylistItem> playlistItems = new ArrayList<>();
                             for (File f : folderFiles) {
                                 playlistItems.add(new UriPlaylistItem(BaseMediaPlayerController.PlayMode.VIDEO, UriPlaylistItem.DURATION_NOT_SPECIFIED, isActionLoopingChecked(menu), f.getAbsolutePath()));
@@ -507,7 +505,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
                         playlistManager.clearTracks();
 
                         String mimeType = URLConnection.guessContentTypeFromName(Uri.parse(file.getAbsolutePath()).toString());
-                        logger.debug("mimeType=" + mimeType);
+                        logger.d("mimeType=" + mimeType);
 
                         if (mimeType.contains("audio")) {
                             mediaPlayerController.setContentUri(BaseMediaPlayerController.PlayMode.AUDIO, Uri.fromFile(file));
@@ -654,7 +652,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
     @Override
     public void onVideoSizeChanged(int width, int height) {
-        logger.debug("onVideoSizeChanged(), width=" + width + ", height=" + height);
+        logger.d("onVideoSizeChanged(), width=" + width + ", height=" + height);
         if (width > 0 && height > 0) {
             Display display = ((WindowManager) (getSystemService(Context.WINDOW_SERVICE))).getDefaultDisplay();
             DisplayMetrics displayMetrics = new DisplayMetrics();
@@ -687,17 +685,17 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
-        logger.debug("surfaceCreated()");
+        logger.d("surfaceCreated()");
     }
 
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        logger.debug("surfaceChanged(), format=" + format + ", width=" + width + ", height=" + height);
+        logger.d("surfaceChanged(), format=" + format + ", width=" + width + ", height=" + height);
     }
 
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
-        logger.debug("surfaceDestroyed()");
+        logger.d("surfaceDestroyed()");
     }
 
 
@@ -725,7 +723,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
     @Override
     public void onError(@NonNull MediaPlayerController.MediaError error) {
-        logger.error("onError(), error=" + error);
+        logger.e("onError(), error=" + error);
         processError();
     }
 

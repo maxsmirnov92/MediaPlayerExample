@@ -38,12 +38,12 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
     private final Runnable mResetRunnable = new Runnable() {
         @Override
         public void run() {
-            logger.debug("mResetRunnable :: run()");
+            logger.d("mResetRunnable :: run()");
             postOnMediaHandler(new Runnable() {
                 @Override
                 public void run() {
                     if (isPreparing()) {
-                        logger.debug("resetting by timeout...");
+                        logger.d("resetting by timeout...");
                         onError(new MediaError(MediaError.PREPARE_TIMEOUT_EXCEEDED, MediaError.UNKNOWN));
                     }
                 }
@@ -85,7 +85,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
     private final MediaPlayer.OnVideoSizeChangedListener mVideoSizeChangedListener =
             new MediaPlayer.OnVideoSizeChangedListener() {
                 public void onVideoSizeChanged(MediaPlayer mp, int width, int height) {
-                    logger.debug("onVideoSizeChanged(), width=" + width + ", height=" + height);
+                    logger.d("onVideoSizeChanged(), width=" + width + ", height=" + height);
                     if (mVideoView != null) {
                         mVideoWidth = mp != null ? mp.getVideoWidth() : width;
                         mVideoHeight = mp != null ? mp.getVideoHeight() : height;
@@ -131,7 +131,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
     private final MediaPlayer.OnInfoListener mInfoListener = new MediaPlayer.OnInfoListener() {
         @Override
         public boolean onInfo(MediaPlayer mp, int what, int extra) {
-            logger.info("onInfo(), what=" + what + ", extra=" + extra);
+            logger.i("onInfo(), what=" + what + ", extra=" + extra);
             return true;
         }
     };
@@ -139,7 +139,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
     private final MediaPlayer.OnErrorListener mErrorListener =
             new MediaPlayer.OnErrorListener() {
                 public boolean onError(MediaPlayer mp, int framework_err, int impl_err) {
-                    logger.error("onError(), framework_err=" + framework_err + ", impl_err=" + impl_err);
+                    logger.e("onError(), framework_err=" + framework_err + ", impl_err=" + impl_err);
                     return MediaPlayerController.this.onError(new MediaError(framework_err, impl_err));
                 }
             };
@@ -259,12 +259,12 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
     @Override
     public void seekTo(int msec) {
         synchronized (mLock) {
-            logger.debug("seekTo(), msec=" + msec);
+            logger.d("seekTo(), msec=" + msec);
             try {
                 seekToInternal(msec);
             } catch (IllegalArgumentException e) {
                 e.printStackTrace();
-                logger.error("an IllegalArgumentException occurred during seekToInternal()", e);
+                logger.e("an IllegalArgumentException occurred during seekToInternal()", e);
             }
         }
     }
@@ -367,12 +367,12 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
     @Override
     protected void openDataSource() {
         synchronized (mLock) {
-            logger.debug("openDataSource(), content: " + (mContentUri != null ? mContentUri : mContentFileDescriptor) + ", current state: " + mCurrentState);
+            logger.d("openDataSource(), content: " + (mContentUri != null ? mContentUri : mContentFileDescriptor) + ", current state: " + mCurrentState);
 
             checkReleased();
 
             if (!isContentSpecified()) {
-                logger.error("can't open data source: content is not specified");
+                logger.e("can't open data source: content is not specified");
                 return;
             }
 
@@ -383,10 +383,10 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
                 if (mContentUri != null) {
 
                     String contentType = HttpURLConnection.guessContentTypeFromName(mContentUri.toString());
-                    logger.info("uri content type: " + contentType);
+                    logger.i("uri content type: " + contentType);
 
                     if (!mNoCheckMediaContentType && TextUtils.isEmpty(contentType)) {
-                        logger.error("empty uri content type");
+                        logger.e("empty uri content type");
                         onError(new MediaError(MediaError.PREPARE_EMPTY_CONTENT_TYPE, MediaError.UNKNOWN));
                         return;
                     }
@@ -397,7 +397,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
                 suspend();
 
                 if (!requestAudioFocus()) {
-                    logger.error("failed to request audio focus");
+                    logger.e("failed to request audio focus");
                 }
 
                 mMediaLooper = Looper.myLooper() != null ? Looper.myLooper() : Looper.getMainLooper();
@@ -417,10 +417,10 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
                     mCurrentBufferPercentage = 0;
 
                     if (mContentUri != null) {
-                        logger.debug("content data source: " + mContentUri);
+                        logger.d("content data source: " + mContentUri);
                         mMediaPlayer.setDataSource(mContext, mContentUri, mContentHeaders);
                     } else if (mContentFileDescriptor != null) {
-                        logger.debug("content data source: " + mContentFileDescriptor);
+                        logger.d("content data source: " + mContentFileDescriptor);
                         mMediaPlayer.setDataSource(mContentFileDescriptor.getFileDescriptor(), mContentFileDescriptor.getStartOffset(), mContentFileDescriptor.getLength());
                     } else {
                         throw new AssertionError("content data source not specified");
@@ -462,28 +462,28 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
 
                     } catch (Exception e) {
                         e.printStackTrace();
-                        logger.error("an Exception occurred during get()", e);
+                        logger.e("an Exception occurred during get()", e);
                         throw new RuntimeException(e);
                     }
 
                 } catch (IOException | IllegalArgumentException | IllegalStateException ex) {
                     ex.printStackTrace();
-                    logger.error("Unable to open content: " + (mContentUri != null ? mContentUri : mContentFileDescriptor), ex);
+                    logger.e("Unable to open content: " + (mContentUri != null ? mContentUri : mContentFileDescriptor), ex);
                     result = false;
                 }
 
                 if (result) {
-                    logger.debug("media player preparing start success / time: " + (System.currentTimeMillis() - startPreparingTime) + " ms");
+                    logger.d("media player preparing start success / time: " + (System.currentTimeMillis() - startPreparingTime) + " ms");
                     // we don't set the target state here either, but preserve the
                     // target state that was there before.
                     toggleMediaControllerEnabled();
                     scheduleResetCallback();
                 } else {
-                    logger.error("media player preparing start failed / time: " + (System.currentTimeMillis() - startPreparingTime) + " ms");
+                    logger.e("media player preparing start failed / time: " + (System.currentTimeMillis() - startPreparingTime) + " ms");
                     onError(new MediaError(MediaError.PREPARE_UNKNOWN, MediaError.UNKNOWN));
                 }
             } else {
-                logger.warn("can't open data source: currently is preparing");
+                logger.w("can't open data source: currently is preparing");
             }
         }
     }
@@ -491,7 +491,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
     @Override
     public void start() {
         synchronized (mLock) {
-            logger.debug("start(), current state: " + mCurrentState);
+            logger.d("start(), current state: " + mCurrentState);
 
             checkReleased();
 
@@ -509,16 +509,16 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
                         }).get(EXECUTOR_CALL_TIMEOUT_S, TimeUnit.SECONDS);
                     } catch (Exception e) {
                         e.printStackTrace();
-                        logger.error("an Exception occurred during get()", e);
+                        logger.e("an Exception occurred during get()", e);
 //                    onError(new MediaError(MediaPlayer.MEDIA_ERROR_UNKNOWN, 0));
                         result = false;
                     }
                     if (result) {
-                        logger.debug("media player starting success / time: " + (System.currentTimeMillis() - startStartingTime) + " ms");
+                        logger.d("media player starting success / time: " + (System.currentTimeMillis() - startStartingTime) + " ms");
                         setCurrentState(State.PLAYING);
                         startPlaybackTimeTask();
                     } else {
-                        logger.error("media player starting failed / time: " + (System.currentTimeMillis() - startStartingTime) + " ms");
+                        logger.e("media player starting failed / time: " + (System.currentTimeMillis() - startStartingTime) + " ms");
                         onError(new MediaError(MediaError.PLAY_UNKNOWN, MediaError.UNKNOWN));
                     }
                 }
@@ -530,7 +530,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
     @Override
     public void pause() {
         synchronized (mLock) {
-            logger.debug("pause(), current state: " + mCurrentState);
+            logger.d("pause(), current state: " + mCurrentState);
 
             checkReleased();
 
@@ -548,16 +548,16 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
                         }).get(EXECUTOR_CALL_TIMEOUT_S, TimeUnit.SECONDS);
                     } catch (Exception e) {
                         e.printStackTrace();
-                        logger.error("an Exception occurred during get()", e);
+                        logger.e("an Exception occurred during get()", e);
 //                    onError(new MediaError(MediaPlayer.MEDIA_ERROR_UNKNOWN, 0));
                         result = false;
                     }
                     if (result) {
-                        logger.debug("media player pausing success / time: " + (System.currentTimeMillis() - startPausingTime) + " ms");
+                        logger.d("media player pausing success / time: " + (System.currentTimeMillis() - startPausingTime) + " ms");
                         stopPlaybackTimeTask();
                         setCurrentState(State.PAUSED);
                     } else {
-                        logger.error("media player pausing failed / time: " + (System.currentTimeMillis() - startPausingTime) + " ms");
+                        logger.e("media player pausing failed / time: " + (System.currentTimeMillis() - startPausingTime) + " ms");
                         onError(new MediaError(MediaError.PAUSE_UNKNOWN, MediaError.UNKNOWN));
                     }
                 }
@@ -568,7 +568,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
 
     public void stop() {
         synchronized (mLock) {
-            logger.debug("stop(), current state: " + mCurrentState);
+            logger.d("stop(), current state: " + mCurrentState);
 
             checkReleased();
 
@@ -587,14 +587,14 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
 
                     } catch (Exception e) {
                         e.printStackTrace();
-                        logger.error("an Exception occurred during get()", e);
+                        logger.e("an Exception occurred during get()", e);
 //                    onError(new MediaError(MediaPlayer.MEDIA_ERROR_UNKNOWN, 0));
                         result = false;
                     }
                     if (result) {
-                        logger.debug("media player stopping success / time: " + (System.currentTimeMillis() - startStoppingTime) + " ms");
+                        logger.d("media player stopping success / time: " + (System.currentTimeMillis() - startStoppingTime) + " ms");
                     } else {
-                        logger.error("media player stopping failed / time: " + (System.currentTimeMillis() - startStoppingTime) + " ms");
+                        logger.e("media player stopping failed / time: " + (System.currentTimeMillis() - startStoppingTime) + " ms");
                         onError(new MediaError(MediaError.STOP_UNKNOWN, MediaError.UNKNOWN));
                     }
                 }
@@ -608,7 +608,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
     @Override
     protected void releasePlayer(boolean clearTargetState) {
         synchronized (mLock) {
-            logger.debug("releasePlayer(), clearTargetState=" + clearTargetState + ", current state: " + mCurrentState);
+            logger.d("releasePlayer(), clearTargetState=" + clearTargetState + ", current state: " + mCurrentState);
 
             checkReleased();
 
@@ -636,15 +636,15 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
                     }).get(EXECUTOR_CALL_TIMEOUT_S, TimeUnit.SECONDS);
                 } catch (Exception e) {
                     e.printStackTrace();
-                    logger.error("an Exception occurred during get()", e);
+                    logger.e("an Exception occurred during get()", e);
 //                onError(new MediaError(MediaPlayer.MEDIA_ERROR_UNKNOWN, 0));
                     result = false;
                 }
 
                 if (result) {
-                    logger.debug("media player reset/release success / time: " + (System.currentTimeMillis() - startReleasingTime) + " ms");
+                    logger.d("media player reset/release success / time: " + (System.currentTimeMillis() - startReleasingTime) + " ms");
                 } else {
-                    logger.error("media player reset/release failed / time: " + (System.currentTimeMillis() - startReleasingTime) + " ms");
+                    logger.e("media player reset/release failed / time: " + (System.currentTimeMillis() - startReleasingTime) + " ms");
                     onError(new MediaError(MediaError.RELEASE_UNKNOWN, MediaError.UNKNOWN));
                 }
 
@@ -659,14 +659,14 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
                 }
 
                 if (!abandonAudioFocus()) {
-                    logger.error("failed to abandon audio focus");
+                    logger.e("failed to abandon audio focus");
                 }
 
                 mReleasingPlayer = false;
             } else if (isPlayerReleased()) {
-                logger.debug("already released");
+                logger.d("already released");
             } else if (isReleasingPlayer()) {
-                logger.debug("already releasing now");
+                logger.d("already releasing now");
             }
         }
     }
@@ -696,7 +696,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
             }
 
 //                if (Build.VERSION.SDK_INT > Build.VERSION_CODES.ICE_CREAM_SANDWICH_MR1) {
-//                    logger.info("track info: " + Arrays.toString(mMediaPlayer.getTrackInfo()));
+//                    logger.i("track info: " + Arrays.toString(mMediaPlayer.getTrackInfo()));
 //                }
 
 
@@ -756,7 +756,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
                     // We didn't actually change the size (it was already at the size
                     // we need), so we won't get a "surface changed" callback, so
                     // start the video here instead of in the callback.
-                    logger.debug("prepared, url: " + mContentUri + ", descriptor: " + mContentFileDescriptor + ", target state: " + mTargetState);
+                    logger.d("prepared, url: " + mContentUri + ", descriptor: " + mContentFileDescriptor + ", target state: " + mTargetState);
                     if (mTargetState == State.PLAYING) {
                         start();
                         if (mMediaController != null) {
@@ -777,7 +777,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
 
                 // We don't know the video size yet, but should start anyway.
                 // The video size might be reported to us later.
-                logger.debug("prepared, url: " + mContentUri + ", descriptor: " + mContentFileDescriptor + ", target state: " + mTargetState);
+                logger.d("prepared, url: " + mContentUri + ", descriptor: " + mContentFileDescriptor + ", target state: " + mTargetState);
                 if (mTargetState == State.PLAYING) {
                     start();
                 }
@@ -803,8 +803,8 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
     @Override
     protected boolean onError(@NonNull MediaError error) {
         synchronized (mLock) {
-            logger.error("target content: " + (mContentUri != null ? mContentUri : mContentFileDescriptor) + " / mode: " + mPlayMode);
-            logger.error("last content: " + (mLastContentUriToOpen != null ? mLastContentUriToOpen : mLastAssetFileDescriptorToOpen) + " / mode: " + mLastModeToOpen);
+            logger.e("target content: " + (mContentUri != null ? mContentUri : mContentFileDescriptor) + " / mode: " + mPlayMode);
+            logger.e("last content: " + (mLastContentUriToOpen != null ? mLastContentUriToOpen : mLastAssetFileDescriptorToOpen) + " / mode: " + mLastModeToOpen);
 
             if (!isPlayerReleased()) {
                 releasePlayer(true);
@@ -821,7 +821,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
     private static class OnVideoSizeChangedObservable extends Observable<OnVideoSizeChangedListener> {
 
         private void dispatchOnVideoSizeChanged(int width, int height) {
-            synchronized (mObservers) {
+            synchronized (observers) {
                 for (OnVideoSizeChangedListener l : copyOfObservers()) {
                     l.onVideoSizeChanged(width, height);
                 }
@@ -831,7 +831,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
 
     private final SurfaceHolder.Callback mSHCallback = new SurfaceHolder.Callback() {
         public void surfaceChanged(SurfaceHolder holder, int format, int w, int h) {
-            logger.debug("surfaceChanged(), format=" + format + ", w=" + w + ", h=" + h);
+            logger.d("surfaceChanged(), format=" + format + ", w=" + w + ", h=" + h);
 
             mSurfaceWidth = w;
             mSurfaceHeight = h;
@@ -851,7 +851,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
         }
 
         public void surfaceCreated(SurfaceHolder holder) {
-            logger.debug("surfaceCreated()");
+            logger.d("surfaceCreated()");
 
             isSurfaceCreated = true;
 
@@ -862,7 +862,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
 
         // after we return from this we can't use the surface any more
         public void surfaceDestroyed(SurfaceHolder holder) {
-            logger.debug("surfaceDestroyed()");
+            logger.d("surfaceDestroyed()");
 
             mSurfaceWidth = 0;
             mSurfaceHeight = 0;

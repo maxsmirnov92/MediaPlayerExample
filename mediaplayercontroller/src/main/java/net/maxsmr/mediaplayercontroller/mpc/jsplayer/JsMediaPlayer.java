@@ -32,13 +32,13 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     private final Runnable mResetRunnable = new Runnable() {
         @Override
         public void run() {
-            logger.debug("mResetRunnable :: run()");
+            logger.d("mResetRunnable :: run()");
             postOnMediaHandler(new Runnable() {
                 @Override
                 public void run() {
                     if (isPageLoaded() && !isPlayerReleased()) {
                         if (isPreparing()) {
-                            logger.debug("resetting by timeout...");
+                            logger.d("resetting by timeout...");
                             onError(new MediaError(OnErrorListener.MediaError.PREPARE_TIMEOUT_EXCEEDED));
                         }
                     }
@@ -103,7 +103,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     @CallSuper
     public void onPageStarted(String url, Bitmap favicon) {
         synchronized (mLock) {
-            logger.debug("onPageStarted(), url=" + url);
+            logger.d("onPageStarted(), url=" + url);
             mPageLoaded = false;
         }
     }
@@ -111,12 +111,12 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     @CallSuper
     public void onPageFinished(String url) {
         synchronized (mLock) {
-            logger.debug("onPageFinished(), url=" + url);
+            logger.d("onPageFinished(), url=" + url);
 
             final String loadedUrl = mWebView.getUrl();
 
             if (!TextUtils.isEmpty(loadedUrl)) {
-                logger.debug("page loaded, making script...");
+                logger.d("page loaded, making script...");
                 String script = makeScriptForUrl(loadedUrl);
                 if (!TextUtils.isEmpty(script)) {
                     mInsertDoneRunnable = new Runnable() {
@@ -129,7 +129,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
                                 clearDataSource(false);
                                 if (open) {
                                     mScheduleOpenDataSource = false;
-                                    logger.debug("openDataSource() was scheduled (after page loaded), opening...");
+                                    logger.d("openDataSource() was scheduled (after page loaded), opening...");
                                     openDataSource();
                                     mPageLoadSuccessObservable.dispatchPageWithScriptsReady(loadedUrl, true);
                                 } else {
@@ -140,10 +140,10 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
                     };
                     mScriptExecutor.execute(script);
                 } else {
-                    logger.error("can't make script, is empty");
+                    logger.e("can't make script, is empty");
                 }
             } else {
-                logger.warn("page loaded, url empty");
+                logger.w("page loaded, url empty");
                 postOnMediaHandler(new Runnable() {
                     @Override
                     public void run() {
@@ -160,7 +160,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     @CallSuper
     @Override
     public void onScriptInsertDone() {
-        logger.debug("onScriptInsertDone(), time: " + System.currentTimeMillis());
+        logger.d("onScriptInsertDone(), time: " + System.currentTimeMillis());
         if (mInsertDoneRunnable != null) {
             postOnMediaHandler(mInsertDoneRunnable);
             mInsertDoneRunnable = null;
@@ -170,12 +170,12 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
 //        @JavascriptInterface
 //        @Override
 //        public void onMediaElementsInsertDone() {
-//            logger.debug("onMediaElementsInsertDone(), time: " + System.currentTimeMillis());
+//            logger.d("onMediaElementsInsertDone(), time: " + System.currentTimeMillis());
 //        }
 
 //        @JavascriptInterface
 //        public void onAbort() {
-//            logger.debug("onAbort()");
+//            logger.d("onAbort()");
 //            postOnMediaHandler(new Runnable() {
 //                @Override
 //                public void run() {
@@ -189,14 +189,14 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     @JavascriptInterface
     @CallSuper
     public void onEnded() {
-        logger.debug("onEnded()");
+        logger.d("onEnded()");
         postOnMediaHandler(new Runnable() {
             @Override
             public void run() {
                 if (isPageLoaded() && !isPlayerReleased()) {
                     onCompletion();
                 } else {
-                    logger.warn("ended, but page is not loaded or player released");
+                    logger.w("ended, but page is not loaded or player released");
                 }
             }
         });
@@ -205,13 +205,13 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     @JavascriptInterface
     @CallSuper
     public void onPlay() {
-        logger.debug("onPlay()");
+        logger.d("onPlay()");
     }
 
     @JavascriptInterface
     @CallSuper
     public void onPlaying() {
-        logger.debug("onPlaying()");
+        logger.d("onPlaying()");
         postOnMediaHandler(new Runnable() {
             @Override
             public void run() {
@@ -220,7 +220,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
                     setTargetState(State.PLAYING);
 //                  startPlaybackTimeTask();
                 } else {
-                    logger.warn("playing, but page is not loaded or player released");
+                    logger.w("playing, but page is not loaded or player released");
                 }
             }
         });
@@ -229,7 +229,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     @JavascriptInterface
     @CallSuper
     public void onPaused() {
-        logger.debug("onPaused()");
+        logger.d("onPaused()");
         postOnMediaHandler(new Runnable() {
             @Override
             public void run() {
@@ -238,7 +238,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
                     setCurrentState(State.PAUSED);
                     setTargetState(State.PAUSED);
                 } else {
-                    logger.warn("paused, but page is not loaded or player released");
+                    logger.w("paused, but page is not loaded or player released");
                 }
             }
         });
@@ -247,14 +247,14 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     @JavascriptInterface
     @CallSuper
     public void onDataPrepared() {
-        logger.debug("onDataPrepared()");
+        logger.d("onDataPrepared()");
         postOnMediaHandler(new Runnable() {
             @Override
             public void run() {
                 if (isPageLoaded()) {
                     onPrepared();
                 } else {
-                    logger.warn("data prepared, but page is not loaded");
+                    logger.w("data prepared, but page is not loaded");
                 }
             }
         });
@@ -263,14 +263,14 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     @JavascriptInterface
     @CallSuper
     public void onError() {
-        logger.error("onError()");
+        logger.e("onError()");
         postOnMediaHandler(new Runnable() {
             @Override
             public void run() {
                 if (isPageLoaded()) {
                     onError(new MediaError(OnErrorListener.MediaError.UNKNOWN));
                 } else {
-                    logger.warn("error, but page is not loaded");
+                    logger.w("error, but page is not loaded");
                 }
             }
         });
@@ -307,7 +307,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
                     mTargetState = State.PLAYING;
                 }
 
-                logger.debug("prepared, url: " + mContentUri + ", target state: " + mTargetState);
+                logger.d("prepared, url: " + mContentUri + ", target state: " + mTargetState);
                 if (mTargetState == State.PLAYING) {
                     start();
                 }
@@ -337,8 +337,8 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     @MainThread
     protected boolean onError(@NonNull MediaError error) {
         synchronized (mLock) {
-            logger.error("target content: " + (mContentUri != null ? mContentUri : mContentFileDescriptor) + " / mode: " + mPlayMode);
-            logger.error("last content: " + (mLastContentUriToOpen != null ? mLastContentUriToOpen : mLastAssetFileDescriptorToOpen) + " / mode: " + mLastModeToOpen);
+            logger.e("target content: " + (mContentUri != null ? mContentUri : mContentFileDescriptor) + " / mode: " + mPlayMode);
+            logger.e("last content: " + (mLastContentUriToOpen != null ? mLastContentUriToOpen : mLastAssetFileDescriptorToOpen) + " / mode: " + mLastModeToOpen);
 
             checkPageNotLoaded();
 
@@ -450,7 +450,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     @MainThread
     public void seekTo(int msec) {
         synchronized (mLock) {
-            logger.debug("seekTo(), msec=" + msec);
+            logger.d("seekTo(), msec=" + msec);
 
             checkReleased();
 
@@ -520,12 +520,12 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     @MainThread
     protected void openDataSource() {
         synchronized (mLock) {
-            logger.debug("openDataSource(), content: " + (mContentUri != null ? mContentUri : mContentFileDescriptor) + ", current state: " + mCurrentState);
+            logger.d("openDataSource(), content: " + (mContentUri != null ? mContentUri : mContentFileDescriptor) + ", current state: " + mCurrentState);
 
             checkReleased();
 
             if (!isContentSpecified()) {
-                logger.error("can't open data source: content is not specified");
+                logger.e("can't open data source: content is not specified");
                 return;
             }
 
@@ -540,18 +540,18 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
                         setCurrentState(State.PREPARING);
 
                         String contentType = HttpURLConnection.guessContentTypeFromName(uri.toString());
-                        logger.info("uri content type: " + contentType);
+                        logger.i("uri content type: " + contentType);
 
                         if (mNoCheckMediaContentType || !TextUtils.isEmpty(contentType)) {
                             beforeOpenDataSource();
                             if (mPlayMode == PlayMode.AUDIO || mPlayMode == PlayMode.VIDEO) {
                                 if (!requestAudioFocus()) {
-                                    logger.error("failed to request audio focus");
+                                    logger.e("failed to request audio focus");
                                 }
                                 mScriptExecutor.execute("openDataSource('" + uri.toString() + "', '" + contentType + "')");
                             } else {
                                 if (!abandonAudioFocus()) {
-                                    logger.error("failed to abandon audio focus");
+                                    logger.e("failed to abandon audio focus");
                                 }
                                 switch (mPlayMode) {
                                     case PICTURE:
@@ -566,7 +566,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
                             }
                             scheduleResetCallback();
                         } else {
-                            logger.error("empty uri content type");
+                            logger.e("empty uri content type");
                             onError(new MediaError(MediaError.PREPARE_EMPTY_CONTENT_TYPE));
                         }
 
@@ -575,11 +575,11 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
                     }
 
                 } else {
-                    logger.warn("page is currently not loaded, openDataSource() scheduled");
+                    logger.w("page is currently not loaded, openDataSource() scheduled");
                     mScheduleOpenDataSource = true;
                 }
             } else {
-                logger.warn("can't open data source: currently is preparing");
+                logger.w("can't open data source: currently is preparing");
                 mScheduleOpenDataSource = true;
             }
         }
@@ -588,7 +588,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     @MainThread
     protected void clearDataSource(final boolean clearTargetState) {
         synchronized (mLock) {
-            logger.debug("clearDataSource(), clearTargetState=" + clearTargetState);
+            logger.d("clearDataSource(), clearTargetState=" + clearTargetState);
             cancelResetCallback();
 //          stopPlaybackTimeTask();
             mScriptExecutor.execute("clearDataSource()");
@@ -608,7 +608,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     @MainThread
     public void start() {
         synchronized (mLock) {
-            logger.debug("start(), current state: " + mCurrentState);
+            logger.d("start(), current state: " + mCurrentState);
             checkReleased();
             if (!isPlaying()) {
                 if (mPlayMode == PlayMode.AUDIO || mPlayMode == PlayMode.VIDEO && isInPlaybackState()) {
@@ -624,7 +624,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     @MainThread
     public void stop() {
         synchronized (mLock) {
-            logger.debug("stop(), current state: " + mCurrentState);
+            logger.d("stop(), current state: " + mCurrentState);
             checkReleased();
             if (mCurrentState != State.IDLE) {
                 if (mPlayMode == PlayMode.AUDIO || mPlayMode == PlayMode.VIDEO && isInPlaybackState()) {
@@ -641,7 +641,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     @MainThread
     public void pause() {
         synchronized (mLock) {
-            logger.debug("pause(), current state: " + mCurrentState);
+            logger.d("pause(), current state: " + mCurrentState);
             checkReleased();
             if (mCurrentState != State.PAUSED) {
                 if (mPlayMode == PlayMode.AUDIO || mPlayMode == PlayMode.VIDEO && isInPlaybackState()) {
@@ -655,7 +655,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     @Override
     @MainThread
     protected void releasePlayer(boolean clearTargetState) {
-        logger.debug("releasePlayer(), clearTargetState=" + clearTargetState + ", current state: " + mCurrentState);
+        logger.d("releasePlayer(), clearTargetState=" + clearTargetState + ", current state: " + mCurrentState);
 
         synchronized (mLock) {
 
@@ -668,7 +668,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
 
                 if (mPlayMode == PlayMode.AUDIO || mPlayMode == PlayMode.VIDEO) {
                     if (!abandonAudioFocus()) {
-                        logger.error("failed to abandon audio focus");
+                        logger.e("failed to abandon audio focus");
                     }
                 }
 
@@ -677,9 +677,9 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
                 mReleasingPlayer = false;
 
             } else if (isPlayerReleased()) {
-                logger.debug("already released");
+                logger.d("already released");
             } else if (isReleasingPlayer()) {
-                logger.debug("already releasing now");
+                logger.d("already releasing now");
             }
         }
     }
@@ -721,7 +721,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
     protected static class PageLoadSuccessObservable extends Observable<OnPageLoadSuccessListener> {
 
         private void dispatchPageWithScriptsReady(String uri, boolean isOpenResourceScheduled) {
-            synchronized (mObservers) {
+            synchronized (observers) {
                 for (OnPageLoadSuccessListener l : copyOfObservers()) {
                     l.onPageWithScriptsReady(uri, isOpenResourceScheduled);
                 }

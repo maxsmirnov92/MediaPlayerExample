@@ -42,13 +42,13 @@ public class HeadsetPlugBroadcastReceiver extends BroadcastReceiver {
     private static class OnHeadsetStateChangedObservable extends Observable<OnHeadsetStateChangedListener> {
 
         private void dispatchHeadphonesPlugged(boolean hasMicrophone) {
-            for (OnHeadsetStateChangedListener l : mObservers) {
+            for (OnHeadsetStateChangedListener l : observers) {
                 l.onHeadphonesPlugged(hasMicrophone);
             }
         }
 
         private void dispatchHeadphonesUnplugged() {
-            for (OnHeadsetStateChangedListener l : mObservers) {
+            for (OnHeadsetStateChangedListener l : observers) {
                 l.onHeadphonesUnplugged();
             }
         }

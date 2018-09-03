@@ -1,1 +1,3 @@
-include ':app', ':mediaplayercontroller'
+include ':app'
+// ':app'
+// ':mediaplayercontroller'

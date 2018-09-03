@@ -37,7 +37,7 @@ public class NoisyAudioBroadcastReceiver extends BroadcastReceiver {
     private static class OnNoisyAudioObservable extends Observable<OnNoisyAudioListener> {
 
         private void dispatchNoisyAudio() {
-            for (OnNoisyAudioListener l : mObservers) {
+            for (OnNoisyAudioListener l : observers) {
                 l.onNoisyAudio();
             }
         }
