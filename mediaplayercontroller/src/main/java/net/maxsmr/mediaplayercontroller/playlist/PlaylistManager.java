@@ -5,8 +5,8 @@ import android.content.res.AssetFileDescriptor;
 import android.net.Uri;
 import android.os.Looper;
 import android.support.annotation.CallSuper;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import android.text.TextUtils;
 
 import net.maxsmr.commonutils.android.media.MetadataRetriever;
@@ -158,7 +158,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         return newUri;
     }
 
-    @NonNull
+    @NotNull
     protected List<T> filterIncorrectTracks(@Nullable Collection<T> tracks) {
         List<T> incorrectTracks = new ArrayList<>();
         if (tracks != null) {
@@ -176,7 +176,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
     }
 
 
-    public PlaylistManager(@NonNull C playerController, @NonNull Class<T> itemClass) {
+    public PlaylistManager(@NotNull C playerController, @NotNull Class<T> itemClass) {
         mPlayerController = playerController;
         mItemClass = itemClass;
         init();
@@ -199,14 +199,14 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
 
     private ScheduledFuture<?> mTrackResetFuture;
 
-//    @NonNull
+//    @NotNull
 //    private PlayMode mPlayMode = DEFAULT_PLAY_MODE;
 
     private boolean mLoopPlaylist;
 
     private int mCurrentTrackIndex = NO_POSITION;
 
-    @NonNull
+    @NotNull
     private TracksSwitchMode mTracksSwitchMode = TracksSwitchMode.CONSEQUENTIALLY;
 
     private final MediaControllerCallbacks mMediaControllerCallbacks = new MediaControllerCallbacks();
@@ -214,7 +214,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
     /**
      * contains strings with urls or paths
      */
-    @NonNull
+    @NotNull
     private final ArrayList<T> mTracks = new ArrayList<>();
 
     private final OnActiveTrackChangedObservable<T> mActiveTrackChangedObservable = new OnActiveTrackChangedObservable<>();
@@ -286,31 +286,31 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         mReleased = true;
     }
 
-    @NonNull
+    @NotNull
     public BaseMediaPlayerController getPlayerController() {
         checkReleased();
         return mPlayerController;
     }
 
-    @NonNull
+    @NotNull
     public Looper getMediaLooper() {
         checkReleased();
         return mPlayerController.getMediaLooper();
     }
 
-    @NonNull
+    @NotNull
     public BaseMediaPlayerController.State getCurrentState() {
         checkReleased();
         return mPlayerController.getCurrentState();
     }
 
-    @NonNull
+    @NotNull
     public BaseMediaPlayerController.State getTargetState() {
         checkReleased();
         return mPlayerController.getTargetState();
     }
 
-    @NonNull
+    @NotNull
     public TracksSwitchMode getTracksSwitchMode() {
         synchronized (mTracks) {
             checkReleased();
@@ -318,7 +318,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    public void setTracksSwitchMode(@NonNull TracksSwitchMode tracksSwitchMode) {
+    public void setTracksSwitchMode(@NotNull TracksSwitchMode tracksSwitchMode) {
         synchronized (mTracks) {
             checkReleased();
             mTracksSwitchMode = tracksSwitchMode;
@@ -424,7 +424,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    public void prepareTrack(@NonNull T track) {
+    public void prepareTrack(@NotNull T track) {
         logger.d("prepareTrack(), track=" + track);
         synchronized (mTracks) {
             prepareTrack(indexOf(track));
@@ -460,7 +460,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    public void playTrack(@NonNull T track) {
+    public void playTrack(@NotNull T track) {
         logger.d("playTrack(), track=" + track);
         synchronized (mTracks) {
             playTrack(indexOf(track));
@@ -627,7 +627,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    private void setTrackInternal(@NonNull T track) {
+    private void setTrackInternal(@NotNull T track) {
 
         checkReleased();
 
@@ -646,7 +646,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         mPlayerController.setLooping(track.isLooping);
     }
 
-    private void prepareTrackInternal(@NonNull T track) {
+    private void prepareTrackInternal(@NotNull T track) {
         logger.d("prepareTrackInternal(), track=" + track);
         T previous = getCurrentTrack();
         setTrackInternal(track);
@@ -675,7 +675,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         mActiveTrackChangedObservable.dispatchPrepare(getCurrentTrack(), previous);
     }
 
-    private void playTrackInternal(@NonNull T track) {
+    private void playTrackInternal(@NotNull T track) {
         logger.d("playTrackInternal(), track=" + track);
         T previous = getCurrentTrack();
         prepareTrackInternal(track);
@@ -722,32 +722,32 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    @NonNull
+    @NotNull
     public Observable<OnActiveTrackChangedListener<T>> getActiveTrackChangedObservable() {
         return mActiveTrackChangedObservable;
     }
 
-    @NonNull
+    @NotNull
     public Observable<OnTracksSetListener<T>> getTracksSetObservable() {
         return mTracksSetObservable;
     }
 
-    @NonNull
+    @NotNull
     public Observable<OnTrackAddedListener<T>> getTrackAddedObservable() {
         return mTrackAddedObservable;
     }
 
-    @NonNull
+    @NotNull
     public Observable<OnTrackSetListener<T>> getTrackSetObservable() {
         return mTrackSetObservable;
     }
 
-    @NonNull
+    @NotNull
     public Observable<OnTrackRemovedListener<T>> getTrackRemovedObservable() {
         return mTrackRemovedObservable;
     }
 
-    @NonNull
+    @NotNull
     public Observable<OnTracksClearedListener> getTracksClearedObservable() {
         return mTracksClearedObservable;
     }
@@ -778,14 +778,14 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    @NonNull
+    @NotNull
     public final List<T> getTracks() {
         synchronized (mTracks) {
             return Collections.unmodifiableList(mTracks);
         }
     }
 
-    @NonNull
+    @NotNull
     public final T getTrack(int at) throws IndexOutOfBoundsException {
         synchronized (mTracks) {
             checkReleased();
@@ -880,7 +880,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    public <O extends AbsPlaylistItem.ItemSortOption> void sort(@NonNull AbsPlaylistItem.ItemComparator<O, ? super T> comparator) {
+    public <O extends AbsPlaylistItem.ItemSortOption> void sort(@NotNull AbsPlaylistItem.ItemComparator<O, ? super T> comparator) {
         synchronized (mTracks) {
             T previousTrack = getCurrentTrack();
             Collections.sort(mTracks, comparator);
@@ -960,7 +960,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
     }
 
     @CallSuper
-    protected void onTracksSetFailed(@NonNull List<T> incorrectTracks) {
+    protected void onTracksSetFailed(@NotNull List<T> incorrectTracks) {
         logger.e("onTracksSetFailed(), incorrectTracks=" + incorrectTracks);
         mTracksSetObservable.dispatchNotSet(incorrectTracks);
     }
@@ -1002,7 +1002,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         addTrack(getTracksCount(), track);
     }
 
-    public final void addTracks(@NonNull List<T> tracks) {
+    public final void addTracks(@NotNull List<T> tracks) {
         for (T track : tracks) {
             addTrack(track);
         }
@@ -1069,7 +1069,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    @NonNull
+    @NotNull
     public final List<T> removeTracksRange(int from, int to) {
         rangeCheck(from);
         rangeCheck(to);
@@ -1122,7 +1122,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
 
         @Override
-        public void onCurrentStateChanged(@NonNull BaseMediaPlayerController.State currentState, @NonNull BaseMediaPlayerController.State previousState) {
+        public void onCurrentStateChanged(@NotNull BaseMediaPlayerController.State currentState, @NotNull BaseMediaPlayerController.State previousState) {
             synchronized (mTracks) {
                 if (!isTracksEmpty()) {
 
@@ -1157,7 +1157,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
 
         @Override
-        public void onTargetStateChanged(@NonNull BaseMediaPlayerController.State targetState) {
+        public void onTargetStateChanged(@NotNull BaseMediaPlayerController.State targetState) {
 
         }
 
@@ -1179,7 +1179,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
 
         @Override
-        public void onError(@NonNull MediaError error) {
+        public void onError(@NotNull MediaError error) {
             logger.e("onError(), error=" + error + ", current track: " + getCurrentTrackIndex() + " / " + getCurrentTrack());
             synchronized (mTracks) {
 
@@ -1196,22 +1196,22 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
 
     public interface OnActiveTrackChangedListener<T extends AbsPlaylistItem> {
 
-        void onPrepare(@NonNull T track, @Nullable T previous);
+        void onPrepare(@NotNull T track, @Nullable T previous);
 
-        void onPlay(@NonNull T current, @Nullable T previous);
+        void onPlay(@NotNull T current, @Nullable T previous);
 
-        void onReset(@NonNull T previous);
+        void onReset(@NotNull T previous);
 
-        void onCompleted(@NonNull T current);
+        void onCompleted(@NotNull T current);
 
-        void onError(@NonNull BaseMediaPlayerController.OnErrorListener.MediaError error, @NonNull T current);
+        void onError(@NotNull BaseMediaPlayerController.OnErrorListener.MediaError error, @NotNull T current);
     }
 
     public interface OnTracksSetListener<T extends AbsPlaylistItem> {
 
-        void onTracksSet(@NonNull List<T> newTracks);
+        void onTracksSet(@NotNull List<T> newTracks);
 
-        void onTracksNotSet(@NonNull List<T> incorrectTracks);
+        void onTracksNotSet(@NotNull List<T> incorrectTracks);
     }
 
     public interface OnTrackAddedListener<T extends AbsPlaylistItem> {
@@ -1284,7 +1284,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
 
     private static class OnTracksSetObservable<T extends AbsPlaylistItem> extends Observable<OnTracksSetListener<T>> {
 
-        private void dispatchSet(@NonNull List<T> newTracks) {
+        private void dispatchSet(@NotNull List<T> newTracks) {
             synchronized (observers) {
                 for (OnTracksSetListener<T> l : copyOfObservers()) {
                     l.onTracksSet(newTracks);
@@ -1292,7 +1292,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
             }
         }
 
-        private void dispatchNotSet(@NonNull List<T> incorrectTracks) {
+        private void dispatchNotSet(@NotNull List<T> incorrectTracks) {
             if (!incorrectTracks.isEmpty()) {
                 synchronized (observers) {
                     for (OnTracksSetListener<T> l : copyOfObservers()) {

@@ -3,7 +3,7 @@ package net.maxsmr.mediaplayercontroller.mpc.receivers;
 
 import android.content.Context;
 import android.media.AudioManager;
-import android.support.annotation.NonNull;
+import org.jetbrains.annotations.NotNull;
 
 import net.maxsmr.commonutils.data.Observable;
 
@@ -13,15 +13,15 @@ public class AudioFocusChangeReceiver implements AudioManager.OnAudioFocusChange
 
     private boolean isRequested = false;
 
-    @NonNull
+    @NotNull
     private final OnAudioFocusChangedObservable audioFocusChangedObservable = new OnAudioFocusChangedObservable();
 
-    @NonNull
+    @NotNull
     public Observable<OnAudioFocusChangeListener> getAudioFocusChangeObservable() {
         return audioFocusChangedObservable;
     }
 
-    public boolean requestFocus(@NonNull Context context) {
+    public boolean requestFocus(@NotNull Context context) {
         if (isRequested) {
             abandonFocus(context);
         }
@@ -29,7 +29,7 @@ public class AudioFocusChangeReceiver implements AudioManager.OnAudioFocusChange
         return isRequested = audioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN) != AUDIOFOCUS_REQUEST_FAILED;
     }
 
-    public boolean abandonFocus(@NonNull Context context) {
+    public boolean abandonFocus(@NotNull Context context) {
         if (isRequested) {
             AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
             try {

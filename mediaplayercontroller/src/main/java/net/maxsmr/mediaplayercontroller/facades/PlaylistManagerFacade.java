@@ -1,8 +1,8 @@
 package net.maxsmr.mediaplayercontroller.facades;
 
 
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import android.util.Pair;
 
 import net.maxsmr.commonutils.data.CompareUtils;
@@ -36,10 +36,10 @@ public final class PlaylistManagerFacade {
         }
     }
 
-    @NonNull
+    @NotNull
     private LinkedHashMap<String, PlaylistManager<?, ?>> mCached = new LinkedHashMap<>();
 
-    @NonNull
+    @NotNull
     public <C extends BaseMediaPlayerController, I extends AbsPlaylistItem> PlaylistManager<C, I> create(String alias, C mpc, Class<I> itemClass) {
         PlaylistManager<C, I> manager = get(alias);
         if (manager == null) {
@@ -98,7 +98,7 @@ public final class PlaylistManagerFacade {
      * @return null if no managers in specified state
      */
     @Nullable
-    private Pair<String, ? extends PlaylistManager<?, ?>> findFirstManagerInState(@NonNull BaseMediaPlayerController.State state) {
+    private Pair<String, ? extends PlaylistManager<?, ?>> findFirstManagerInState(@NotNull BaseMediaPlayerController.State state) {
         for (Map.Entry<String, PlaylistManager<?, ?>> entry : mCached.entrySet()) {
             if (entry.getValue().getPlayerController().getCurrentState() == state) {
                 return new Pair<>(entry.getKey(), entry.getValue());
@@ -108,7 +108,7 @@ public final class PlaylistManagerFacade {
     }
 
     @Nullable
-    private Pair<String, ? extends PlaylistManager<?, ?>> findFirstManagerInStateByAlias(@NonNull BaseMediaPlayerController.State state, String alias) {
+    private Pair<String, ? extends PlaylistManager<?, ?>> findFirstManagerInStateByAlias(@NotNull BaseMediaPlayerController.State state, String alias) {
         for (Map.Entry<String, PlaylistManager<?, ?>> entry : mCached.entrySet()) {
             if (CompareUtils.stringsEqual(entry.getKey(), alias, true) && entry.getValue().getPlayerController().getCurrentState() == state) {
                 return new Pair<>(entry.getKey(), entry.getValue());

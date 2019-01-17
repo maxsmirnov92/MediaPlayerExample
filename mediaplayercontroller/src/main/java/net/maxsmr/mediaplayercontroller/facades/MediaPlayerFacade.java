@@ -1,8 +1,10 @@
 package net.maxsmr.mediaplayercontroller.facades;
 
 import android.content.Context;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import android.os.Looper;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import net.maxsmr.mediaplayercontroller.mpc.nativeplayer.MediaPlayerController;
 
@@ -12,7 +14,7 @@ public final class MediaPlayerFacade {
 
     private static MediaPlayerFacade sInstance;
 
-    public static MediaPlayerFacade initInstance(@NonNull Context context) {
+    public static MediaPlayerFacade initInstance(@NotNull Context context) {
         if (sInstance == null) {
             synchronized (MediaPlayerFacade.class) {
                 sInstance = new MediaPlayerFacade(context);
@@ -37,21 +39,21 @@ public final class MediaPlayerFacade {
         }
     }
 
-    public MediaPlayerFacade(@NonNull Context context) {
+    public MediaPlayerFacade(@NotNull Context context) {
         mContext = context;
     }
 
-    @NonNull
+    @NotNull
     private final Context mContext;
 
-    @NonNull
+    @NotNull
     private LinkedHashMap<String, MediaPlayerController> mCached = new LinkedHashMap<>();
 
-    @NonNull
-    public MediaPlayerController create(String alias) {
+    @NotNull
+    public MediaPlayerController getOrCreate(String alias) {
         MediaPlayerController mpc = get(alias);
         if (mpc == null || mpc.isReleased()) {
-            mpc = new MediaPlayerController(mContext);
+            mpc = new MediaPlayerController(mContext, Looper.getMainLooper());
         }
         mCached.put(alias, mpc);
         return mpc;

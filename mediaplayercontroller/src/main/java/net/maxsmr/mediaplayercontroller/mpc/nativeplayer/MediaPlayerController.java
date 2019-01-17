@@ -8,8 +8,8 @@ import android.net.Uri;
 import android.os.Looper;
 import android.support.annotation.CallSuper;
 import android.support.annotation.MainThread;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import android.text.TextUtils;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -27,59 +27,23 @@ import java.util.concurrent.TimeUnit;
 
 public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayerController.MediaError> {
 
-    public MediaPlayerController(@NonNull Context context) {
-        super(context);
+    public MediaPlayerController(@NotNull Context context, @Nullable Looper mediaLooper) {
+        super(context, mediaLooper);
     }
 
     private final static int EXECUTOR_CALL_TIMEOUT_S = 30;
 
-    private MediaPlayer mMediaPlayer;
-
-    private final Runnable mResetRunnable = new Runnable() {
-        @Override
-        public void run() {
-            logger.d("mResetRunnable :: run()");
-            postOnMediaHandler(new Runnable() {
-                @Override
-                public void run() {
-                    if (isPreparing()) {
-                        logger.d("resetting by timeout...");
-                        onError(new MediaError(MediaError.PREPARE_TIMEOUT_EXCEEDED, MediaError.UNKNOWN));
-                    }
-                }
-            });
-        }
+    private final Runnable mResetRunnable = () -> {
+        logger.d("mResetRunnable :: run()");
+        postOnMediaHandler(() -> {
+            if (isPreparing()) {
+                logger.d("resetting by timeout...");
+                onError(new MediaError(MediaError.PREPARE_TIMEOUT_EXCEEDED, MediaError.UNKNOWN));
+            }
+        });
     };
 
-    private boolean isSurfaceCreated = false;
-
-    @Nullable
-    private SurfaceView mVideoView;
-
-    private int mVideoWidth = 0;
-    private int mVideoHeight = 0;
-    private int mSurfaceWidth = 0;
-    private int mSurfaceHeight = 0;
-
-    @Nullable
-    private MediaController mMediaController;
-
-    private boolean mMediaControllerAttached;
-
-    @Nullable
-    private View mAnchorView;
-
-    public boolean isPlayerReleased() {
-        return mCurrentState == State.IDLE || mMediaPlayer == null || isReleased();
-    }
-
-    @NonNull
-    @Override
-    protected Runnable getResetRunnable() {
-        return mResetRunnable;
-    }
-
-    @NonNull
+    @NotNull
     private final OnVideoSizeChangedObservable mVideoSizeChangedObservable = new OnVideoSizeChangedObservable();
 
     private final MediaPlayer.OnVideoSizeChangedListener mVideoSizeChangedListener =
@@ -105,47 +69,57 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
             };
 
     private final MediaPlayer.OnBufferingUpdateListener mBufferingUpdateListener =
-            new MediaPlayer.OnBufferingUpdateListener() {
-                public void onBufferingUpdate(MediaPlayer mp, int percent) {
-                    MediaPlayerController.this.onBufferingUpdate(percent);
-                }
-            };
+            (mp, percent) -> MediaPlayerController.this.onBufferingUpdate(percent);
 
 
-    private final MediaPlayer.OnPreparedListener mPreparedListener = new MediaPlayer.OnPreparedListener() {
-
-        @SuppressWarnings("ConstantConditions")
-        @Override
-        public void onPrepared(MediaPlayer mp) {
-            MediaPlayerController.this.onPrepared();
-        }
-    };
+    private final MediaPlayer.OnPreparedListener mPreparedListener = mp -> MediaPlayerController.this.onPrepared();
 
     private final MediaPlayer.OnCompletionListener mCompletionListener =
-            new MediaPlayer.OnCompletionListener() {
-                public void onCompletion(MediaPlayer mp) {
-                    MediaPlayerController.this.onCompletion();
-                }
-            };
+            mp -> MediaPlayerController.this.onCompletion();
 
-    private final MediaPlayer.OnInfoListener mInfoListener = new MediaPlayer.OnInfoListener() {
-        @Override
-        public boolean onInfo(MediaPlayer mp, int what, int extra) {
-            logger.i("onInfo(), what=" + what + ", extra=" + extra);
-            return true;
-        }
+    private final MediaPlayer.OnInfoListener mInfoListener = (mp, what, extra) -> {
+        logger.i("onInfo(), what=" + what + ", extra=" + extra);
+        return true;
     };
 
     private final MediaPlayer.OnErrorListener mErrorListener =
-            new MediaPlayer.OnErrorListener() {
-                public boolean onError(MediaPlayer mp, int framework_err, int impl_err) {
-                    logger.e("onError(), framework_err=" + framework_err + ", impl_err=" + impl_err);
-                    return MediaPlayerController.this.onError(new MediaError(framework_err, impl_err));
-                }
+            (mp, framework_err, impl_err) -> {
+                logger.e("onError(), framework_err=" + framework_err + ", impl_err=" + impl_err);
+                return MediaPlayerController.this.onError(new MediaError(framework_err, impl_err));
             };
 
+    private MediaPlayer mMediaPlayer;
 
-    @NonNull
+    private boolean isSurfaceCreated = false;
+
+    @Nullable
+    private SurfaceView mVideoView;
+
+    private int mVideoWidth = 0;
+    private int mVideoHeight = 0;
+    private int mSurfaceWidth = 0;
+    private int mSurfaceHeight = 0;
+
+    @Nullable
+    private MediaController mMediaController;
+
+    private boolean mMediaControllerAttached;
+
+    @Nullable
+    private View mAnchorView;
+
+    public boolean isPlayerReleased() {
+        return mCurrentState == State.IDLE || mMediaPlayer == null || isReleased();
+    }
+
+    @NotNull
+    @Override
+    protected Runnable getResetRunnable() {
+        return mResetRunnable;
+    }
+
+
+    @NotNull
     public final Observable<OnVideoSizeChangedListener> getVideoSizeChangedObservable() {
         return mVideoSizeChangedObservable;
     }
@@ -216,7 +190,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
     }
 
     @Override
-    public boolean isPlayModeSupported(@NonNull PlayMode playMode) {
+    public boolean isPlayModeSupported(@NotNull PlayMode playMode) {
         return playMode == PlayMode.AUDIO || playMode == PlayMode.VIDEO;
     }
 
@@ -399,8 +373,6 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
                 if (!requestAudioFocus()) {
                     logger.e("failed to request audio focus");
                 }
-
-                mMediaLooper = Looper.myLooper() != null ? Looper.myLooper() : Looper.getMainLooper();
 
                 boolean result;
                 final long startPreparingTime = System.currentTimeMillis();
@@ -650,7 +622,6 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
 
                 stopPlaybackTimeTask();
 
-                mMediaLooper = null;
                 mMediaPlayer = null;
 
                 setCurrentState(State.IDLE);
@@ -801,7 +772,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
     }
 
     @Override
-    protected boolean onError(@NonNull MediaError error) {
+    protected boolean onError(@NotNull MediaError error) {
         synchronized (mLock) {
             logger.e("target content: " + (mContentUri != null ? mContentUri : mContentFileDescriptor) + " / mode: " + mPlayMode);
             logger.e("last content: " + (mLastContentUriToOpen != null ? mLastContentUriToOpen : mLastAssetFileDescriptorToOpen) + " / mode: " + mLastModeToOpen);

@@ -1,7 +1,7 @@
 package ru.maxsmr.mediaplayerexample.app;
 
 import android.app.Application;
-import android.support.annotation.NonNull;
+import org.jetbrains.annotations.NotNull;
 
 import net.maxsmr.commonutils.logger.BaseLogger;
 import net.maxsmr.commonutils.logger.LogcatLogger;
@@ -18,7 +18,7 @@ public class MediaPlayerExampleApp extends Application {
     static {
         BaseLoggerHolder.initInstance(() -> new BaseLoggerHolder(true) {
             @Override
-            protected BaseLogger createLogger(@NonNull Class<?> clazz) {
+            protected BaseLogger createLogger(@NotNull Class<?> clazz) {
                 return new LogcatLogger(clazz.getSimpleName());
             }
         });

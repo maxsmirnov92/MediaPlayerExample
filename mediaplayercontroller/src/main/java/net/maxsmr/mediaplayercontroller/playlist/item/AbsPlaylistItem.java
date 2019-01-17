@@ -1,7 +1,7 @@
 package net.maxsmr.mediaplayercontroller.playlist.item;
 
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import net.maxsmr.commonutils.data.CompareUtils;
 import net.maxsmr.commonutils.data.sort.AbsOptionableComparator;
@@ -17,7 +17,7 @@ public abstract class AbsPlaylistItem<I extends AbsPlaylistItem> implements Comp
 
     public static final int DURATION_NOT_SPECIFIED = 0;
 
-    @NonNull
+    @NotNull
     public final BaseMediaPlayerController.PlayMode playMode;
 
     /** in millis */
@@ -25,7 +25,7 @@ public abstract class AbsPlaylistItem<I extends AbsPlaylistItem> implements Comp
 
     public final boolean isLooping;
 
-    protected AbsPlaylistItem(@NonNull BaseMediaPlayerController.PlayMode playMode, long duration, boolean isLooping) {
+    protected AbsPlaylistItem(@NotNull BaseMediaPlayerController.PlayMode playMode, long duration, boolean isLooping) {
         if (playMode == BaseMediaPlayerController.PlayMode.NONE) {
             throw new IllegalArgumentException("playMode cannot be " + playMode);
         }
@@ -42,7 +42,7 @@ public abstract class AbsPlaylistItem<I extends AbsPlaylistItem> implements Comp
 
     @SuppressWarnings("unchecked")
     @Override
-    public final int compareTo(@NonNull I another) {
+    public final int compareTo(@NotNull I another) {
         Comparator<I> comparator = getDefaultComparator();
         return comparator != null? comparator.compare((I) this, another) : 0;
     }
@@ -103,7 +103,7 @@ public abstract class AbsPlaylistItem<I extends AbsPlaylistItem> implements Comp
             super(sortOptions);
         }
 
-        protected int compare(@Nullable I lhs, @Nullable I rhs, @NonNull O option, boolean ascending) {
+        protected int compare(@Nullable I lhs, @Nullable I rhs, @NotNull O option, boolean ascending) {
             int result = compareForNull(lhs, rhs, ascending);
             if (result != 0) {
                 return result;

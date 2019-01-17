@@ -2,8 +2,8 @@ package net.maxsmr.mediaplayercontroller.playlist.item;
 
 
 import android.content.res.AssetFileDescriptor;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
 
@@ -26,7 +26,7 @@ public class DescriptorPlaylistItem<I extends DescriptorPlaylistItem> extends Ab
 
     public final AssetFileDescriptor descriptor;
 
-    public DescriptorPlaylistItem(@NonNull BaseMediaPlayerController.PlayMode playMode, long duration , boolean isLooping, AssetFileDescriptor descriptor) {
+    public DescriptorPlaylistItem(@NotNull BaseMediaPlayerController.PlayMode playMode, long duration , boolean isLooping, AssetFileDescriptor descriptor) {
         super(playMode, duration, isLooping);
         this.descriptor = descriptor;
     }

@@ -4,25 +4,25 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.support.annotation.NonNull;
+import org.jetbrains.annotations.NotNull;
 
 import net.maxsmr.commonutils.data.Observable;
 
 public class HeadsetPlugBroadcastReceiver extends BroadcastReceiver {
 
-    @NonNull
+    @NotNull
     private final OnHeadsetStateChangedObservable headsetStateChangedObservable = new OnHeadsetStateChangedObservable();
 
-    @NonNull
+    @NotNull
     public Observable<OnHeadsetStateChangedListener> getHeadsetStateChangedObservable() {
         return headsetStateChangedObservable;
     }
 
-    public void register(@NonNull Context context) {
+    public void register(@NotNull Context context) {
         context.registerReceiver(this, new IntentFilter(Intent.ACTION_HEADSET_PLUG));
     }
 
-    public void unregister(@NonNull Context context) {
+    public void unregister(@NotNull Context context) {
         context.unregisterReceiver(this);
     }
 

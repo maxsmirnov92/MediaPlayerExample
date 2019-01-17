@@ -9,7 +9,7 @@ import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
-import android.support.annotation.NonNull;
+import org.jetbrains.annotations.NotNull;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AlertDialog;
@@ -403,7 +403,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     }
 
     @Override
-    public void onCurrentStateChanged(@NonNull final MediaPlayerController.State currentState, @NonNull MediaPlayerController.State previousState) {
+    public void onCurrentStateChanged(@NotNull final MediaPlayerController.State currentState, @NotNull MediaPlayerController.State previousState) {
         logger.i("onCurrentStateChanged(), currentState=" + currentState + ", previousState=" + previousState);
         runOnUiThread(new Runnable() {
             @Override
@@ -432,7 +432,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     }
 
     @Override
-    public void onTargetStateChanged(@NonNull MediaPlayerController.State targetState) {
+    public void onTargetStateChanged(@NotNull MediaPlayerController.State targetState) {
         logger.i("onTargetStateChanged(), targetState=" + targetState);
     }
 
@@ -667,7 +667,7 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
         }
     }
 
-    public static Point getCorrectedSurfaceViewSizeByPreviewSize(@NonNull Point viewSize, @NonNull Point previewSize, int orientation) {
+    public static Point getCorrectedSurfaceViewSizeByPreviewSize(@NotNull Point viewSize, @NotNull Point previewSize, int orientation) {
         float videoScale = (float) previewSize.x / (float) previewSize.y;
         final int targetWidth;
         final int targetHeight;
@@ -722,18 +722,18 @@ public class TestActivity extends AppCompatActivity implements SurfaceHolder.Cal
     }
 
     @Override
-    public void onError(@NonNull MediaPlayerController.MediaError error) {
+    public void onError(@NotNull MediaPlayerController.MediaError error) {
         logger.e("onError(), error=" + error);
         processError();
     }
 
     @Override
-    public void onTracksSet(@NonNull List<UriPlaylistItem> newTracks) {
+    public void onTracksSet(@NotNull List<UriPlaylistItem> newTracks) {
 
     }
 
     @Override
-    public void onTracksNotSet(@NonNull List<UriPlaylistItem> incorrectTracks) {
+    public void onTracksNotSet(@NotNull List<UriPlaylistItem> incorrectTracks) {
 
     }
 

@@ -1,7 +1,7 @@
 package ru.maxsmr.mediaplayerexample.app;
 
 import android.os.Environment;
-import android.support.annotation.NonNull;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 
@@ -25,19 +25,19 @@ public final class Paths {
         return Environment.getExternalStorageState().equalsIgnoreCase(Environment.MEDIA_MOUNTED);
     }
 
-    @NonNull
+    @NotNull
     public static File getDefaultWorkingDir() {
         return ALLOW_USE_EXTERNAL_CARD && Paths.isExternalStorageMounted() ? new File(Paths.APP_DATA_EXTERNAL_PATH) : new File(Paths.APP_DATA_INTERNAL_PATH);  // return ctx.getFilesDir().getAbsolutePath();
     }
 
     public static final String LOG_DIR_NAME = "log";
 
-    @NonNull
-    public static File makeLogDirPath(@NonNull File workingDir) {
+    @NotNull
+    public static File makeLogDirPath(@NotNull File workingDir) {
         return new File(workingDir, LOG_DIR_NAME);
     }
 
-    @NonNull
+    @NotNull
     public static File getDefaultLogDirPath() {
         return makeLogDirPath(getDefaultWorkingDir());
     }
@@ -45,12 +45,12 @@ public final class Paths {
     public static final String LOG_FILENAME = "OpenCvDetectorExample.log";
     ;
 
-    @NonNull
-    public static File makeLogFilePath(@NonNull File workingDir) {
+    @NotNull
+    public static File makeLogFilePath(@NotNull File workingDir) {
         return new File(makeLogDirPath(workingDir), LOG_FILENAME);
     }
 
-    @NonNull
+    @NotNull
     public static File getDefaultLogFilePath() {
         return makeLogFilePath(getDefaultLogDirPath());
     }

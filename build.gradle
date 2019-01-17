@@ -6,7 +6,7 @@ buildscript {
         google()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.1.4'
+        classpath 'com.android.tools.build:gradle:3.3.0'
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
@@ -25,15 +25,14 @@ allprojects {
 ext {
     sourceCompatibilityVersion = 1.8
 
-    sdkVersion = 27
-    minSdkVersion_ = 14
-    buildToolsVersion_ = "27.0.3"
-    appCompatVersion = "27.1.1"
+    androidSdkVersion = 28
+    androidMinSdkVersion = 14
+    buildToolsVersion = "28.0.3"
 
     bintrayGradleVersion = "1.7.3"
     mavenGradleVersion = "1.4.1"
 
-    taskUtilsVersion = "1.0.4.9"
+    taskUtilsVersion = "1.0.7"
 }
 
 task clean(type: Delete) {

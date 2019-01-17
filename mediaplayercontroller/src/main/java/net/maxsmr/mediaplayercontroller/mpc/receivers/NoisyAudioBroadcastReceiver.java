@@ -5,25 +5,25 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.media.AudioManager;
-import android.support.annotation.NonNull;
+import org.jetbrains.annotations.NotNull;
 
 import net.maxsmr.commonutils.data.Observable;
 
 public class NoisyAudioBroadcastReceiver extends BroadcastReceiver {
 
-    @NonNull
+    @NotNull
     private final OnNoisyAudioObservable noisyAudioObservable = new OnNoisyAudioObservable();
 
-    @NonNull
+    @NotNull
     public Observable<OnNoisyAudioListener> getNoisyAudioObservable() {
         return noisyAudioObservable;
     }
 
-    public void register(@NonNull Context context) {
+    public void register(@NotNull Context context) {
         context.registerReceiver(this, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
     }
 
-    public void unregister(@NonNull Context context) {
+    public void unregister(@NotNull Context context) {
         context.unregisterReceiver(this);
     }
 

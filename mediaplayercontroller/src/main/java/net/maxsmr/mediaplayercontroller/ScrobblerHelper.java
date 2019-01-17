@@ -2,8 +2,8 @@ package net.maxsmr.mediaplayercontroller;
 
 import android.content.Context;
 import android.content.Intent;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import android.text.TextUtils;
 
 import net.maxsmr.commonutils.android.media.MetadataRetriever;
@@ -11,20 +11,22 @@ import net.maxsmr.commonutils.logger.BaseLogger;
 import net.maxsmr.commonutils.logger.holder.BaseLoggerHolder;
 import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
 
+import org.jetbrains.annotations.NotNull;
+
 public final class ScrobblerHelper {
 
     private static final BaseLogger logger = BaseLoggerHolder.getInstance().getLogger(ScrobblerHelper.class);
 
-    public static ScrobblerHelper attach(@NonNull Context context, @NonNull BaseMediaPlayerController<?> mpc) {
+    public static ScrobblerHelper attach(@NotNull Context context, @NotNull BaseMediaPlayerController<?> mpc) {
         logger.d("attach(), mpc=" + mpc);
         return new ScrobblerHelper(context, mpc);
     }
 
-    private static boolean isScrobbleState(@NonNull BaseMediaPlayerController.State state) {
+    private static boolean isScrobbleState(@NotNull BaseMediaPlayerController.State state) {
         return state == BaseMediaPlayerController.State.IDLE || state == BaseMediaPlayerController.State.PAUSED || state == BaseMediaPlayerController.State.PLAYING;
     }
 
-    private ScrobblerHelper(@NonNull Context context, @NonNull BaseMediaPlayerController<?> mpc) {
+    private ScrobblerHelper(@NotNull Context context, @NotNull BaseMediaPlayerController<?> mpc) {
         mContext = context;
         mMpc = mpc;
         mMpc.getStateChangedObservable().registerObserver(mCallbacks);
@@ -36,17 +38,17 @@ public final class ScrobblerHelper {
         }
     }
 
-    @NonNull
+    @NotNull
     private final Context mContext;
 
     private BaseMediaPlayerController<?> mMpc;
 
-    @NonNull
+    @NotNull
     private final MediaPlayerCallbacks mCallbacks = new MediaPlayerCallbacks();
 
     private boolean mScrobblingEnabled = true;
 
-    @NonNull
+    @NotNull
     private BaseMediaPlayerController.State mLastState = BaseMediaPlayerController.State.IDLE;
 
     private MetadataRetriever.MediaMetadata mLastMetadata;
@@ -55,7 +57,7 @@ public final class ScrobblerHelper {
         return metadata != null && !TextUtils.isEmpty(metadata.artist) && !TextUtils.isEmpty(metadata.title) && metadata.durationMs > 0;
     }
 
-    private synchronized void notifyScrobblerStateChanged(@NonNull BaseMediaPlayerController.State newState, @NonNull BaseMediaPlayerController.State oldState, @Nullable MetadataRetriever.MediaMetadata metadata, long position) {
+    private synchronized void notifyScrobblerStateChanged(@NotNull BaseMediaPlayerController.State newState, @NotNull BaseMediaPlayerController.State oldState, @Nullable MetadataRetriever.MediaMetadata metadata, long position) {
         logger.d("notifyScrobblerStateChanged(), newState=" + newState + ", oldState=" + oldState + ", metadata=" + metadata + ", position=" + position);
 
         if (mMpc == null) {
@@ -212,7 +214,7 @@ public final class ScrobblerHelper {
         }
 
         @Override
-        public void onCurrentStateChanged(@NonNull BaseMediaPlayerController.State currentState, @NonNull BaseMediaPlayerController.State previousState) {
+        public void onCurrentStateChanged(@NotNull BaseMediaPlayerController.State currentState, @NotNull BaseMediaPlayerController.State previousState) {
             if (currentState == BaseMediaPlayerController.State.RELEASED) {
                 detach();
             } else {
@@ -221,7 +223,7 @@ public final class ScrobblerHelper {
         }
 
         @Override
-        public void onTargetStateChanged(@NonNull BaseMediaPlayerController.State targetState) {
+        public void onTargetStateChanged(@NotNull BaseMediaPlayerController.State targetState) {
 
         }
     }

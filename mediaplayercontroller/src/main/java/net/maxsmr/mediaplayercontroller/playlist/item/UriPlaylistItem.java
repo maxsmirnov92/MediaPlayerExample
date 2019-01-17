@@ -1,7 +1,7 @@
 package net.maxsmr.mediaplayercontroller.playlist.item;
 
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import net.maxsmr.commonutils.data.CompareUtils;
 import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
@@ -30,7 +30,7 @@ public class UriPlaylistItem<I extends UriPlaylistItem> extends AbsPlaylistItem<
      */
     public final String uri;
 
-    public UriPlaylistItem(@NonNull BaseMediaPlayerController.PlayMode playMode, long duration, boolean isLooping, String uri) {
+    public UriPlaylistItem(@NotNull BaseMediaPlayerController.PlayMode playMode, long duration, boolean isLooping, String uri) {
         super(playMode, duration, isLooping);
 //        if (StringUtils.isEmpty(track)) {
 //            throw new IllegalArgumentException("empty track: " + track);
@@ -84,7 +84,7 @@ public class UriPlaylistItem<I extends UriPlaylistItem> extends AbsPlaylistItem<
         }
 
         @Override
-        protected int compare(I lhs, I rhs, @NonNull O option, boolean ascending) {
+        protected int compare(I lhs, I rhs, @NotNull O option, boolean ascending) {
             int result = compareForNull(lhs, rhs, ascending);
             if (result != 0) {
                 return result;
