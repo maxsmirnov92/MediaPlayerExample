@@ -33,5 +33,7 @@ app/build
 
 .*
 !.gitignore
-!../MxSUtilsLibrary/.travis.yml
+!.travis.yml.bak
 bintray.json
+
+keystore.properties

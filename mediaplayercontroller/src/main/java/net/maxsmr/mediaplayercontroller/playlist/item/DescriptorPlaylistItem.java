@@ -11,7 +11,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class DescriptorPlaylistItem<I extends DescriptorPlaylistItem> extends AbsPlaylistItem<I> {
+public class DescriptorPlaylistItem<I extends DescriptorPlaylistItem> extends BasePlaylistItem<I> {
 
     @SuppressWarnings("unchecked")
     public static final ItemComparator defaultComparator;
@@ -47,6 +47,7 @@ public class DescriptorPlaylistItem<I extends DescriptorPlaylistItem> extends Ab
         return descriptor != null ? descriptor.hashCode() : 0;
     }
 
+    @NotNull
     @Override
     public String toString() {
         return "DescriptorPlaylistItem{" +

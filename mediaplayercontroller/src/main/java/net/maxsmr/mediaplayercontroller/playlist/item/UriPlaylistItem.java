@@ -1,10 +1,10 @@
 package net.maxsmr.mediaplayercontroller.playlist.item;
 
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-
 import net.maxsmr.commonutils.data.CompareUtils;
 import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -12,7 +12,7 @@ import java.util.Map;
 
 import static net.maxsmr.commonutils.data.CompareUtils.compareForNull;
 
-public class UriPlaylistItem<I extends UriPlaylistItem> extends AbsPlaylistItem<I> {
+public class UriPlaylistItem<I extends UriPlaylistItem> extends BasePlaylistItem<I> {
 
     @SuppressWarnings("unchecked")
     public static final UriItemComparator defaultComparator;
@@ -54,6 +54,7 @@ public class UriPlaylistItem<I extends UriPlaylistItem> extends AbsPlaylistItem<
         return uri != null ? uri.hashCode() : 0;
     }
 
+    @NotNull
     @Override
     public String toString() {
         return "UriPlaylistItem{" +

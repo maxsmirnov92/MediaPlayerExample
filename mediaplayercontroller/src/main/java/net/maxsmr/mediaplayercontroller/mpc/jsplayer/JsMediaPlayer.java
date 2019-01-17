@@ -6,8 +6,6 @@ import android.net.Uri;
 import android.os.Looper;
 import android.support.annotation.CallSuper;
 import android.support.annotation.MainThread;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import android.text.TextUtils;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
@@ -17,6 +15,7 @@ import net.maxsmr.commonutils.data.Observable;
 import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.net.HttpURLConnection;
 
@@ -24,10 +23,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
 
     @NotNull
     protected final WebView mWebView;
-
-    @NotNull
-    protected final ScriptCallback.Executor mScriptExecutor;
-
+    
     @NotNull
     protected final PageLoadSuccessObservable mPageLoadSuccessObservable = new PageLoadSuccessObservable();
 
@@ -59,7 +55,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
 
     public JsMediaPlayer(@NotNull WebView webView) {
         super(webView.getContext(), Looper.getMainLooper());
-        mScriptExecutor = new ScriptCallback.Executor(this.mWebView = webView);
+        mWebView = webView;
     }
 
     @NotNull
@@ -115,7 +111,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
                 String script = makeScriptForUrl(loadedUrl);
                 if (!TextUtils.isEmpty(script)) {
                     mInsertDoneRunnable = () -> {
-                        mScriptExecutor.execute("addCallbacks()");
+                        JavaScriptExecutor.execute(mWebView, "addCallbacks()");
                         mPageLoaded = true;
                         if (!isReleased()) {
                             boolean open = mScheduleOpenDataSource || mLastModeToOpen != PlayMode.NONE;
@@ -130,7 +126,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
                             }
                         }
                     };
-                    mScriptExecutor.execute(script);
+                    JavaScriptExecutor.execute(mWebView, script);
                 } else {
                     logger.e("can't make script, is empty");
                 }
@@ -388,7 +384,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
             super.setLooping(toggle);
             if (mPlayMode == PlayMode.AUDIO || mPlayMode == PlayMode.VIDEO) {
                 if (isInPlaybackState()) {
-                    mScriptExecutor.execute("setLoop(" + mLoopWhenPreparing + ")");
+                    JavaScriptExecutor.execute(mWebView,"setLoop(" + mLoopWhenPreparing + ")");
                 }
             }
         }
@@ -404,9 +400,9 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
                     if (isInPlaybackState()) {
                         float volume = Math.min(left, right);
                         if (Float.compare(volume, VOLUME_MIN) == 0) {
-                            mScriptExecutor.execute("setMute(" + true + ")");
+                            JavaScriptExecutor.execute(mWebView,"setMute(" + true + ")");
                         } else if (Float.compare(volume, VOLUME_MAX) == 0) {
-                            mScriptExecutor.execute("setMute(" + false + ")");
+                            JavaScriptExecutor.execute(mWebView, "setMute(" + false + ")");
                         }
                     }
                 }
@@ -429,7 +425,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
             if (mPlayMode == PlayMode.AUDIO || mPlayMode == PlayMode.VIDEO) {
                 if (isInPlaybackState()) {
                     if (msec >= POSITION_START) {
-                        mScriptExecutor.execute("seekTo(" + msec + ")");
+                        JavaScriptExecutor.execute(mWebView,"seekTo(" + msec + ")");
                     }
                     mSeekWhenPrepared = POSITION_NO;
                 } else {
@@ -516,17 +512,17 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
                                 if (!requestAudioFocus()) {
                                     logger.e("failed to request audio focus");
                                 }
-                                mScriptExecutor.execute("openDataSource('" + uri.toString() + "', '" + contentType + "')");
+                                JavaScriptExecutor.execute(mWebView, "openDataSource('" + uri.toString() + "', '" + contentType + "')");
                             } else {
                                 if (!abandonAudioFocus()) {
                                     logger.e("failed to abandon audio focus");
                                 }
                                 switch (mPlayMode) {
                                     case PICTURE:
-                                        mScriptExecutor.execute("openImage('" + uri.toString() + "')");
+                                        JavaScriptExecutor.execute(mWebView, "openImage('" + uri.toString() + "')");
                                         break;
                                     case PAGE:
-                                        mScriptExecutor.execute("openPage('" + uri.toString() + "')");
+                                        JavaScriptExecutor.execute(mWebView, "openPage('" + uri.toString() + "')");
                                         break;
                                     default:
                                         throw new IllegalStateException("unsupported " + PlayMode.class.getSimpleName() + ": " + mPlayMode);
@@ -559,9 +555,9 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
             logger.d("clearDataSource(), clearTargetState=" + clearTargetState);
             cancelResetCallback();
 //          stopPlaybackTimeTask();
-            mScriptExecutor.execute("clearDataSource()");
-            mScriptExecutor.execute("clearImage()");
-            mScriptExecutor.execute("clearPage()");
+            JavaScriptExecutor.execute(mWebView, "clearDataSource()");
+            JavaScriptExecutor.execute(mWebView, "clearImage()");
+            JavaScriptExecutor.execute(mWebView, "clearPage()");
             mLastContentUriToOpen = null;
             mLastAssetFileDescriptorToOpen = null;
             mLastModeToOpen = PlayMode.NONE;
@@ -580,7 +576,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
             checkReleased();
             if (!isPlaying()) {
                 if (mPlayMode == PlayMode.AUDIO || mPlayMode == PlayMode.VIDEO && isInPlaybackState()) {
-                    mScriptExecutor.execute("play()");
+                    JavaScriptExecutor.execute(mWebView, "play()");
 //                  startPlaybackTimeTask();
                 }
             }
@@ -596,7 +592,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
             checkReleased();
             if (mCurrentState != State.IDLE) {
                 if (mPlayMode == PlayMode.AUDIO || mPlayMode == PlayMode.VIDEO && isInPlaybackState()) {
-                    mScriptExecutor.execute("stop()");
+                    JavaScriptExecutor.execute(mWebView, "stop()");
                 }
             }
             if (!isPlayerReleased()) {
@@ -613,7 +609,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
             checkReleased();
             if (mCurrentState != State.PAUSED) {
                 if (mPlayMode == PlayMode.AUDIO || mPlayMode == PlayMode.VIDEO && isInPlaybackState()) {
-                    mScriptExecutor.execute("pause()");
+                    JavaScriptExecutor.execute(mWebView, "pause()");
                 }
             }
             setTargetState(State.PAUSED);

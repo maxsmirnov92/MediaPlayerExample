@@ -5,8 +5,6 @@ import android.content.res.AssetFileDescriptor;
 import android.net.Uri;
 import android.os.Looper;
 import android.support.annotation.CallSuper;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import android.text.TextUtils;
 
 import net.maxsmr.commonutils.android.media.MetadataRetriever;
@@ -17,10 +15,12 @@ import net.maxsmr.commonutils.data.Observable;
 import net.maxsmr.commonutils.logger.BaseLogger;
 import net.maxsmr.commonutils.logger.holder.BaseLoggerHolder;
 import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
-import net.maxsmr.mediaplayercontroller.playlist.item.AbsPlaylistItem;
+import net.maxsmr.mediaplayercontroller.playlist.item.BasePlaylistItem;
 import net.maxsmr.mediaplayercontroller.playlist.item.DescriptorPlaylistItem;
 import net.maxsmr.mediaplayercontroller.playlist.item.UriPlaylistItem;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 import java.net.HttpURLConnection;
@@ -34,7 +34,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ScheduledFuture;
 
-public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsPlaylistItem> {
+public class PlaylistManager<C extends BaseMediaPlayerController, T extends BasePlaylistItem> {
 
     private static final BaseLogger logger = BaseLoggerHolder.getInstance().getLogger(PlaylistManager.class);
 
@@ -652,7 +652,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         setTrackInternal(track);
         mPlayerController.resume();
         boolean schedule = false;
-        if (track.duration != AbsPlaylistItem.DURATION_NOT_SPECIFIED) {
+        if (track.duration != BasePlaylistItem.DURATION_NOT_SPECIFIED) {
             schedule = !mLoopPlaylist || getTracksCount() > 1;
             if (track.playMode != BaseMediaPlayerController.PlayMode.NONE && !track.playMode.isInfiniteMode) {
                 if (track instanceof UriPlaylistItem) {
@@ -880,7 +880,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    public <O extends AbsPlaylistItem.ItemSortOption> void sort(@NotNull AbsPlaylistItem.ItemComparator<O, ? super T> comparator) {
+    public <O extends BasePlaylistItem.ItemSortOption> void sort(@NotNull BasePlaylistItem.ItemComparator<O, ? super T> comparator) {
         synchronized (mTracks) {
             T previousTrack = getCurrentTrack();
             Collections.sort(mTracks, comparator);
@@ -1194,7 +1194,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    public interface OnActiveTrackChangedListener<T extends AbsPlaylistItem> {
+    public interface OnActiveTrackChangedListener<T extends BasePlaylistItem> {
 
         void onPrepare(@NotNull T track, @Nullable T previous);
 
@@ -1207,28 +1207,28 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         void onError(@NotNull BaseMediaPlayerController.OnErrorListener.MediaError error, @NotNull T current);
     }
 
-    public interface OnTracksSetListener<T extends AbsPlaylistItem> {
+    public interface OnTracksSetListener<T extends BasePlaylistItem> {
 
         void onTracksSet(@NotNull List<T> newTracks);
 
         void onTracksNotSet(@NotNull List<T> incorrectTracks);
     }
 
-    public interface OnTrackAddedListener<T extends AbsPlaylistItem> {
+    public interface OnTrackAddedListener<T extends BasePlaylistItem> {
 
         void onTrackAdded(int to, T trackUrl);
 
         void onTrackAddFailed(int to, T trackUrl);
     }
 
-    public interface OnTrackSetListener<T extends AbsPlaylistItem> {
+    public interface OnTrackSetListener<T extends BasePlaylistItem> {
 
         void onTrackSet(int in, T track);
 
         void onTrackSetFailed(int in, T track);
     }
 
-    public interface OnTrackRemovedListener<T extends AbsPlaylistItem> {
+    public interface OnTrackRemovedListener<T extends BasePlaylistItem> {
 
         void onTrackRemoved(int from, T track);
     }
@@ -1238,7 +1238,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         void onTracksCleared(int oldCount);
     }
 
-    private static class OnActiveTrackChangedObservable<T extends AbsPlaylistItem> extends Observable<OnActiveTrackChangedListener<T>> {
+    private static class OnActiveTrackChangedObservable<T extends BasePlaylistItem> extends Observable<OnActiveTrackChangedListener<T>> {
 
         private void dispatchPrepare(T current, T previous) {
             synchronized (observers) {
@@ -1282,7 +1282,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
     }
 
 
-    private static class OnTracksSetObservable<T extends AbsPlaylistItem> extends Observable<OnTracksSetListener<T>> {
+    private static class OnTracksSetObservable<T extends BasePlaylistItem> extends Observable<OnTracksSetListener<T>> {
 
         private void dispatchSet(@NotNull List<T> newTracks) {
             synchronized (observers) {
@@ -1303,7 +1303,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    private static class OnTrackAddedObservable<T extends AbsPlaylistItem> extends Observable<OnTrackAddedListener<T>> {
+    private static class OnTrackAddedObservable<T extends BasePlaylistItem> extends Observable<OnTrackAddedListener<T>> {
 
         private void dispatchAdded(int to, T track) {
             synchronized (observers) {
@@ -1322,7 +1322,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    private static class OnTrackSetObservable<T extends AbsPlaylistItem> extends Observable<OnTrackSetListener<T>> {
+    private static class OnTrackSetObservable<T extends BasePlaylistItem> extends Observable<OnTrackSetListener<T>> {
 
         private void dispatchSet(int in, T track) {
             synchronized (observers) {
@@ -1341,7 +1341,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends AbsP
         }
     }
 
-    private static class OnTrackRemovedObservable<T extends AbsPlaylistItem> extends Observable<OnTrackRemovedListener<T>> {
+    private static class OnTrackRemovedObservable<T extends BasePlaylistItem> extends Observable<OnTrackRemovedListener<T>> {
 
         private void dispatchRemoved(int from, T track) {
             synchronized (observers) {

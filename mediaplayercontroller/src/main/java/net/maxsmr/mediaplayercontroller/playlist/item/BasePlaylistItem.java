@@ -1,19 +1,19 @@
 package net.maxsmr.mediaplayercontroller.playlist.item;
 
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-
 import net.maxsmr.commonutils.data.CompareUtils;
-import net.maxsmr.commonutils.data.sort.AbsOptionableComparator;
+import net.maxsmr.commonutils.data.sort.BaseOptionableComparator;
 import net.maxsmr.commonutils.data.sort.ISortOption;
 import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Comparator;
 import java.util.Map;
 
 import static net.maxsmr.commonutils.data.CompareUtils.compareForNull;
 
-public abstract class AbsPlaylistItem<I extends AbsPlaylistItem> implements Comparable<I> {
+public abstract class BasePlaylistItem<I extends BasePlaylistItem> implements Comparable<I> {
 
     public static final int DURATION_NOT_SPECIFIED = 0;
 
@@ -25,7 +25,7 @@ public abstract class AbsPlaylistItem<I extends AbsPlaylistItem> implements Comp
 
     public final boolean isLooping;
 
-    protected AbsPlaylistItem(@NotNull BaseMediaPlayerController.PlayMode playMode, long duration, boolean isLooping) {
+    protected BasePlaylistItem(@NotNull BaseMediaPlayerController.PlayMode playMode, long duration, boolean isLooping) {
         if (playMode == BaseMediaPlayerController.PlayMode.NONE) {
             throw new IllegalArgumentException("playMode cannot be " + playMode);
         }
@@ -47,9 +47,10 @@ public abstract class AbsPlaylistItem<I extends AbsPlaylistItem> implements Comp
         return comparator != null? comparator.compare((I) this, another) : 0;
     }
 
+    @NotNull
     @Override
     public String toString() {
-        return "AbsPlaylistItem{" +
+        return "BasePlaylistItem{" +
                 "playMode=" + playMode +
                 ", duration=" + duration +
                 ", isLooping=" + isLooping +
@@ -89,6 +90,7 @@ public abstract class AbsPlaylistItem<I extends AbsPlaylistItem> implements Comp
             return name != null ? name.hashCode() : 0;
         }
 
+        @NotNull
         @Override
         public String toString() {
             return "ItemSortOption{" +
@@ -97,7 +99,7 @@ public abstract class AbsPlaylistItem<I extends AbsPlaylistItem> implements Comp
         }
     }
 
-    public static class ItemComparator<O extends ItemSortOption, I extends AbsPlaylistItem<I>> extends AbsOptionableComparator<O, I> {
+    public static class ItemComparator<O extends ItemSortOption, I extends BasePlaylistItem<I>> extends BaseOptionableComparator<O, I> {
 
         public ItemComparator(Map<O, Boolean> sortOptions) {
             super(sortOptions);

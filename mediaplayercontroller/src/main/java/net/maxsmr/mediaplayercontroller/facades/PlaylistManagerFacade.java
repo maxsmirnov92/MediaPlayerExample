@@ -1,14 +1,15 @@
 package net.maxsmr.mediaplayercontroller.facades;
 
 
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import android.util.Pair;
 
 import net.maxsmr.commonutils.data.CompareUtils;
 import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
 import net.maxsmr.mediaplayercontroller.playlist.PlaylistManager;
-import net.maxsmr.mediaplayercontroller.playlist.item.AbsPlaylistItem;
+import net.maxsmr.mediaplayercontroller.playlist.item.BasePlaylistItem;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -40,7 +41,7 @@ public final class PlaylistManagerFacade {
     private LinkedHashMap<String, PlaylistManager<?, ?>> mCached = new LinkedHashMap<>();
 
     @NotNull
-    public <C extends BaseMediaPlayerController, I extends AbsPlaylistItem> PlaylistManager<C, I> create(String alias, C mpc, Class<I> itemClass) {
+    public <C extends BaseMediaPlayerController, I extends BasePlaylistItem> PlaylistManager<C, I> create(String alias, C mpc, Class<I> itemClass) {
         PlaylistManager<C, I> manager = get(alias);
         if (manager == null) {
             manager = new PlaylistManager<>(mpc, itemClass);
@@ -52,7 +53,7 @@ public final class PlaylistManagerFacade {
 
     @SuppressWarnings("unchecked")
     @Nullable
-    public <C extends BaseMediaPlayerController, I extends AbsPlaylistItem> PlaylistManager<C, I> get(String alias) throws ClassCastException {
+    public <C extends BaseMediaPlayerController, I extends BasePlaylistItem> PlaylistManager<C, I> get(String alias) throws ClassCastException {
         PlaylistManager<?, ?> manager = mCached.get(alias);
         if (manager!= null && manager.isReleased()) {
             manager = null;
