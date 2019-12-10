@@ -1,6 +1,7 @@
-package ru.maxsmr.mediaplayerexample.app;
+package net.maxsmr.mediaplayerexample.app;
 
 import android.os.Environment;
+
 import org.jetbrains.annotations.NotNull;
 
 import java.io.File;

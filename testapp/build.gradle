@@ -1,0 +1,26 @@
+apply from: "$rootDir/buildSrc/androidApp.gradle"
+
+android {
+
+    Properties hardcodeProperties = new Properties()
+    if (file("hardcode.properties").exists()) {
+        hardcodeProperties.load(new FileInputStream(file("hardcode.properties")))
+    }
+    final hardcodeAudioUrl = hardcodeProperties["AUDIO_URL"]
+    final hardcodeVideoUrl = hardcodeProperties["VIDEO_URL"]
+    final hardcodeUrlChoice = hardcodeProperties["URL_TYPE_TO_USE"]
+
+    defaultConfig {
+
+        buildConfigField "String", "AUDIO_URL", "\"" + hardcodeAudioUrl + "\""
+        buildConfigField "String", "VIDEO_URL", "\"" + hardcodeVideoUrl + "\""
+        buildConfigField "String", "URL_TYPE_TO_USE", "\"" + hardcodeUrlChoice + "\""
+    }
+
+}
+
+dependencies {
+
+    implementation project(':mediaplayercontroller')
+//    implementation "net.maxsmr:mediaplayercontroller:${project.getModuleVersionNameByPath(":recyclerview-mediaplayercontroller")}"
+}

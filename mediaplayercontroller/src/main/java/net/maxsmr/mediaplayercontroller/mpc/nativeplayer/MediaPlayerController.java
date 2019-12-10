@@ -6,23 +6,24 @@ import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Looper;
-import android.support.annotation.CallSuper;
-import android.support.annotation.MainThread;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import android.text.TextUtils;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.widget.MediaController;
 
+import androidx.annotation.CallSuper;
+import androidx.annotation.MainThread;
+
 import net.maxsmr.commonutils.data.CompareUtils;
 import net.maxsmr.commonutils.data.Observable;
 import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.io.IOException;
 import java.net.HttpURLConnection;
-import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
 public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayerController.MediaError> {
@@ -88,6 +89,50 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
                 return MediaPlayerController.this.onError(new MediaError(framework_err, impl_err));
             };
 
+    private final SurfaceHolder.Callback mSHCallback = new SurfaceHolder.Callback() {
+        public void surfaceChanged(SurfaceHolder holder, int format, int w, int h) {
+            logger.d("surfaceChanged(), format=" + format + ", w=" + w + ", h=" + h);
+
+            mSurfaceWidth = w;
+            mSurfaceHeight = h;
+
+            boolean isValidState = (mTargetState == State.PLAYING) && isVideoSpecified();
+            boolean hasValidSize = (mVideoWidth == w && mVideoHeight == h);
+
+            if (mMediaPlayer != null && isValidState && hasValidSize) {
+                if (mSeekWhenPrepared != POSITION_NO) {
+                    seekTo(mSeekWhenPrepared);
+                }
+                if (CompareUtils.compareFloats(mVolumeLeftWhenPrepared, (float) VOLUME_NOT_SET, true) != 0 && CompareUtils.compareFloats(mVolumeLeftWhenPrepared, (float) VOLUME_NOT_SET, true) != 0) {
+                    setVolume(mVolumeLeftWhenPrepared, mVolumeRightWhenPrepared);
+                }
+                start();
+            }
+        }
+
+        public void surfaceCreated(SurfaceHolder holder) {
+            logger.d("surfaceCreated()");
+
+            isSurfaceCreated = true;
+
+            if (isVideoSpecified()) {
+                openDataSource();
+            }
+        }
+
+        // after we return from this we can't use the surface any more
+        public void surfaceDestroyed(SurfaceHolder holder) {
+            logger.d("surfaceDestroyed()");
+
+            mSurfaceWidth = 0;
+            mSurfaceHeight = 0;
+
+            if (!isReleased()) {
+                stop();
+            }
+        }
+    };
+
     private MediaPlayer mMediaPlayer;
 
     private boolean isSurfaceCreated = false;
@@ -100,6 +145,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
     private int mSurfaceWidth = 0;
     private int mSurfaceHeight = 0;
 
+    // TODO replace by independent interface
     @Nullable
     private MediaController mMediaController;
 
@@ -423,13 +469,9 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
                     beforeOpenDataSource();
 
                     try {
-                        result = submitOnExecutor(new Callable<Boolean>() {
-
-                            @Override
-                            public Boolean call() throws Exception {
-                                mMediaPlayer.prepareAsync();
-                                return true;
-                            }
+                        result = submitOnExecutor(() -> {
+                            mMediaPlayer.prepareAsync();
+                            return true;
                         }).get(EXECUTOR_CALL_TIMEOUT_S, TimeUnit.SECONDS);
 
                     } catch (Exception e) {
@@ -472,17 +514,13 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
                     boolean result;
                     final long startStartingTime = System.currentTimeMillis();
                     try {
-                        result = submitOnExecutor(new Callable<Boolean>() {
-                            @Override
-                            public Boolean call() throws Exception {
-                                mMediaPlayer.start();
-                                return true;
-                            }
+                        result = submitOnExecutor(() -> {
+                            mMediaPlayer.start();
+                            return true;
                         }).get(EXECUTOR_CALL_TIMEOUT_S, TimeUnit.SECONDS);
                     } catch (Exception e) {
                         e.printStackTrace();
                         logger.e("an Exception occurred during get()", e);
-//                    onError(new MediaError(MediaPlayer.MEDIA_ERROR_UNKNOWN, 0));
                         result = false;
                     }
                     if (result) {
@@ -511,17 +549,13 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
                     boolean result;
                     final long startPausingTime = System.currentTimeMillis();
                     try {
-                        result = submitOnExecutor(new Callable<Boolean>() {
-                            @Override
-                            public Boolean call() throws Exception {
-                                mMediaPlayer.pause();
-                                return true;
-                            }
+                        result = submitOnExecutor(() -> {
+                            mMediaPlayer.pause();
+                            return true;
                         }).get(EXECUTOR_CALL_TIMEOUT_S, TimeUnit.SECONDS);
                     } catch (Exception e) {
                         e.printStackTrace();
                         logger.e("an Exception occurred during get()", e);
-//                    onError(new MediaError(MediaPlayer.MEDIA_ERROR_UNKNOWN, 0));
                         result = false;
                     }
                     if (result) {
@@ -549,18 +583,14 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
                     boolean result;
                     final long startStoppingTime = System.currentTimeMillis();
                     try {
-                        result = submitOnExecutor(new Callable<Boolean>() {
-                            @Override
-                            public Boolean call() throws Exception {
-                                mMediaPlayer.stop();
-                                return true;
-                            }
+                        result = submitOnExecutor(() -> {
+                            mMediaPlayer.stop();
+                            return true;
                         }).get(EXECUTOR_CALL_TIMEOUT_S, TimeUnit.SECONDS);
 
                     } catch (Exception e) {
                         e.printStackTrace();
                         logger.e("an Exception occurred during get()", e);
-//                    onError(new MediaError(MediaPlayer.MEDIA_ERROR_UNKNOWN, 0));
                         result = false;
                     }
                     if (result) {
@@ -598,18 +628,14 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
                 boolean result;
                 final long startReleasingTime = System.currentTimeMillis();
                 try {
-                    result = submitOnExecutor(new Callable<Boolean>() {
-                        @Override
-                        public Boolean call() throws Exception {
-                            mMediaPlayer.reset();
-                            mMediaPlayer.release();
-                            return true;
-                        }
+                    result = submitOnExecutor(() -> {
+                        mMediaPlayer.reset();
+                        mMediaPlayer.release();
+                        return true;
                     }).get(EXECUTOR_CALL_TIMEOUT_S, TimeUnit.SECONDS);
                 } catch (Exception e) {
                     e.printStackTrace();
                     logger.e("an Exception occurred during get()", e);
-//                onError(new MediaError(MediaPlayer.MEDIA_ERROR_UNKNOWN, 0));
                     result = false;
                 }
 
@@ -666,10 +692,9 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
                 return false;
             }
 
-//                if (Build.VERSION.SDK_INT > Build.VERSION_CODES.ICE_CREAM_SANDWICH_MR1) {
-//                    logger.i("track info: " + Arrays.toString(mMediaPlayer.getTrackInfo()));
-//                }
-
+//            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.ICE_CREAM_SANDWICH_MR1) {
+//                logger.i("track info: " + Arrays.toString(mMediaPlayer.getTrackInfo()));
+//            }
 
             Uri resourceUri = getContentUri();
 
@@ -800,50 +825,6 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
         }
     }
 
-    private final SurfaceHolder.Callback mSHCallback = new SurfaceHolder.Callback() {
-        public void surfaceChanged(SurfaceHolder holder, int format, int w, int h) {
-            logger.d("surfaceChanged(), format=" + format + ", w=" + w + ", h=" + h);
-
-            mSurfaceWidth = w;
-            mSurfaceHeight = h;
-
-            boolean isValidState = (mTargetState == State.PLAYING) && isVideoSpecified();
-            boolean hasValidSize = (mVideoWidth == w && mVideoHeight == h);
-
-            if (mMediaPlayer != null && isValidState && hasValidSize) {
-                if (mSeekWhenPrepared != POSITION_NO) {
-                    seekTo(mSeekWhenPrepared);
-                }
-                if (CompareUtils.compareFloats(mVolumeLeftWhenPrepared, (float) VOLUME_NOT_SET, true) != 0 && CompareUtils.compareFloats(mVolumeLeftWhenPrepared, (float) VOLUME_NOT_SET, true) != 0) {
-                    setVolume(mVolumeLeftWhenPrepared, mVolumeRightWhenPrepared);
-                }
-                start();
-            }
-        }
-
-        public void surfaceCreated(SurfaceHolder holder) {
-            logger.d("surfaceCreated()");
-
-            isSurfaceCreated = true;
-
-            if (isVideoSpecified()) {
-                openDataSource();
-            }
-        }
-
-        // after we return from this we can't use the surface any more
-        public void surfaceDestroyed(SurfaceHolder holder) {
-            logger.d("surfaceDestroyed()");
-
-            mSurfaceWidth = 0;
-            mSurfaceHeight = 0;
-
-            if (!isReleased()) {
-                stop();
-            }
-        }
-    };
-
     public static class MediaError extends BaseMediaPlayerController.OnErrorListener.MediaError {
 
         @ErrorDef
@@ -856,6 +837,7 @@ public class MediaPlayerController extends BaseMediaPlayerController<MediaPlayer
             this.extra = extra;
         }
 
+        @NotNull
         @Override
         public String toString() {
             return "MediaError{" +

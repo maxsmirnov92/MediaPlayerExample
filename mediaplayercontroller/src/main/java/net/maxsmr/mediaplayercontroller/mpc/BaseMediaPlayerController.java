@@ -9,16 +9,16 @@ import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
-import android.support.annotation.CallSuper;
-import android.support.annotation.IntDef;
-import org.jetbrains.annotations.Nullable;
-import android.support.annotation.RawRes;
-import android.support.v4.content.ContextCompat;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Pair;
 import android.widget.MediaController;
+
+import androidx.annotation.CallSuper;
+import androidx.annotation.IntDef;
+import androidx.annotation.RawRes;
+import androidx.core.content.ContextCompat;
 
 import net.maxsmr.commonutils.android.media.MediaStoreInfoRetriever;
 import net.maxsmr.commonutils.android.media.MetadataRetriever;
@@ -33,6 +33,7 @@ import net.maxsmr.mediaplayercontroller.mpc.receivers.NoisyAudioBroadcastReceive
 import net.maxsmr.tasksutils.ScheduledThreadPoolExecutorManager;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 import java.io.IOException;
@@ -170,7 +171,6 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         this.mMediaHandler = new Handler(this.mMediaLooper);
         this.init();
     }
-
 
     @NotNull
     private final AudioFocusChangeReceiver.OnAudioFocusChangeListener mAudioFocusChangeListener = new AudioFocusChangeReceiver.OnAudioFocusChangeListener() {
@@ -381,7 +381,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
                 State oldState = mCurrentState;
                 mCurrentState = newState;
                 logger.i("current state: " + mCurrentState);
-                mStateChangedObservable.dispatchCurrentStateChanged(oldState);
+                mStateChangedObservable.dispatchCurrentStateChanged(mCurrentState, oldState);
             }
         }
     }
@@ -399,7 +399,7 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
             if (newState != mTargetState) {
                 mTargetState = newState;
                 logger.i("target state: " + mTargetState);
-                mStateChangedObservable.dispatchTargetStateChanged();
+                mStateChangedObservable.dispatchTargetStateChanged(mTargetState);
             }
         }
     }
@@ -1112,31 +1112,9 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         void onPlaybackTimeUpdateTime(int position, int duration);
     }
 
-    protected class PlaybackTimeUpdateTimeObservable extends Observable<OnPlaybackTimeUpdateTimeListener> {
-
-        void dispatchPlaybackTimeUpdated() {
-            synchronized (observers) {
-                for (OnPlaybackTimeUpdateTimeListener l : copyOfObservers()) {
-                    l.onPlaybackTimeUpdateTime(getCurrentPosition(), getDuration());
-                }
-            }
-        }
-    }
-
     public interface OnBufferingUpdateListener {
 
         void onBufferingUpdate(int percentage);
-    }
-
-    protected static class OnBufferingUpdateObservable extends Observable<OnBufferingUpdateListener> {
-
-        void dispatchOnOnBufferingUpdate(int percentage) {
-            synchronized (observers) {
-                for (OnBufferingUpdateListener l : copyOfObservers()) {
-                    l.onBufferingUpdate(percentage);
-                }
-            }
-        }
     }
 
     public interface OnCompletionListener {
@@ -1145,17 +1123,6 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
          * @param isLooping if track looping mode set
          */
         void onCompletion(boolean isLooping);
-    }
-
-    protected class OnCompletionObservable extends Observable<OnCompletionListener> {
-
-        void dispatchCompleted() {
-            synchronized (observers) {
-                for (OnCompletionListener l : copyOfObservers()) {
-                    l.onCompletion(isLooping());
-                }
-            }
-        }
     }
 
     public interface OnErrorListener<E extends OnErrorListener.MediaError> {
@@ -1180,16 +1147,6 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         void onError(@NotNull E error);
     }
 
-    protected static class OnErrorObservable<E extends OnErrorListener.MediaError> extends Observable<OnErrorListener<E>> {
-
-        void dispatchError(@NotNull E error) {
-            synchronized (observers) {
-                for (OnErrorListener<E> l : copyOfObservers()) {
-                    l.onError(error);
-                }
-            }
-        }
-    }
 
     public interface OnStateChangedListener {
 
@@ -1198,33 +1155,6 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         void onCurrentStateChanged(@NotNull State currentState, @NotNull State previousState);
 
         void onTargetStateChanged(@NotNull State targetState);
-    }
-
-    protected class OnStateChangedObservable extends Observable<OnStateChangedListener> {
-
-        void dispatchBeforeOpenDataSource() {
-            synchronized (observers) {
-                for (OnStateChangedListener l : copyOfObservers()) {
-                    l.onBeforeOpenDataSource();
-                }
-            }
-        }
-
-        void dispatchCurrentStateChanged(@NotNull State previousState) {
-            synchronized (observers) {
-                for (OnStateChangedListener l : copyOfObservers()) {
-                    l.onCurrentStateChanged(mCurrentState, previousState);
-                }
-            }
-        }
-
-        void dispatchTargetStateChanged() {
-            synchronized (observers) {
-                for (OnStateChangedListener l : copyOfObservers()) {
-                    l.onTargetStateChanged(mTargetState);
-                }
-            }
-        }
     }
 
     /**
@@ -1276,4 +1206,74 @@ public abstract class BaseMediaPlayerController<E extends BaseMediaPlayerControl
         }
     }
 
+    protected class PlaybackTimeUpdateTimeObservable extends Observable<OnPlaybackTimeUpdateTimeListener> {
+
+        void dispatchPlaybackTimeUpdated() {
+            synchronized (observers) {
+                for (OnPlaybackTimeUpdateTimeListener l : copyOfObservers()) {
+                    l.onPlaybackTimeUpdateTime(getCurrentPosition(), getDuration());
+                }
+            }
+        }
+    }
+
+    protected static class OnBufferingUpdateObservable extends Observable<OnBufferingUpdateListener> {
+
+        void dispatchOnOnBufferingUpdate(int percentage) {
+            synchronized (observers) {
+                for (OnBufferingUpdateListener l : copyOfObservers()) {
+                    l.onBufferingUpdate(percentage);
+                }
+            }
+        }
+    }
+
+    protected class OnCompletionObservable extends Observable<OnCompletionListener> {
+
+        void dispatchCompleted() {
+            synchronized (observers) {
+                for (OnCompletionListener l : copyOfObservers()) {
+                    l.onCompletion(isLooping());
+                }
+            }
+        }
+    }
+
+    protected static class OnErrorObservable<E extends OnErrorListener.MediaError> extends Observable<OnErrorListener<E>> {
+
+        void dispatchError(@NotNull E error) {
+            synchronized (observers) {
+                for (OnErrorListener<E> l : copyOfObservers()) {
+                    l.onError(error);
+                }
+            }
+        }
+    }
+
+    protected static class OnStateChangedObservable extends Observable<OnStateChangedListener> {
+
+        void dispatchBeforeOpenDataSource() {
+            synchronized (observers) {
+                for (OnStateChangedListener l : copyOfObservers()) {
+                    l.onBeforeOpenDataSource();
+                }
+            }
+        }
+
+        void dispatchCurrentStateChanged(@NotNull State currentState, @NotNull State previousState) {
+            synchronized (observers) {
+                for (OnStateChangedListener l : copyOfObservers()) {
+                    l.onCurrentStateChanged(currentState, previousState);
+                }
+            }
+        }
+
+        void dispatchTargetStateChanged(@NotNull State targetState) {
+            synchronized (observers) {
+                for (OnStateChangedListener l : copyOfObservers()) {
+                    l.onTargetStateChanged(targetState);
+                }
+            }
+        }
+    }
 }

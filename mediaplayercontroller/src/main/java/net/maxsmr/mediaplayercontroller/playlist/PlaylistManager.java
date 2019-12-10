@@ -4,14 +4,15 @@ import android.content.ContentResolver;
 import android.content.res.AssetFileDescriptor;
 import android.net.Uri;
 import android.os.Looper;
-import android.support.annotation.CallSuper;
 import android.text.TextUtils;
+
+import androidx.annotation.CallSuper;
 
 import net.maxsmr.commonutils.android.media.MetadataRetriever;
 import net.maxsmr.commonutils.data.CompareUtils;
 import net.maxsmr.commonutils.data.FileHelper;
-import net.maxsmr.commonutils.data.MathUtils;
 import net.maxsmr.commonutils.data.Observable;
+import net.maxsmr.commonutils.data.number.MathUtils;
 import net.maxsmr.commonutils.logger.BaseLogger;
 import net.maxsmr.commonutils.logger.holder.BaseLoggerHolder;
 import net.maxsmr.mediaplayercontroller.mpc.BaseMediaPlayerController;
@@ -33,6 +34,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ScheduledFuture;
+
+import static net.maxsmr.mediaplayercontroller.playlist.PlaylistManager.TracksSwitchMode.RANDOM;
 
 public class PlaylistManager<C extends BaseMediaPlayerController, T extends BasePlaylistItem> {
 
@@ -598,23 +601,21 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends Base
         synchronized (mTracks) {
             if (!isTracksEmpty()) {
                 boolean handled = false;
-                switch (mTracksSwitchMode) {
-                    case RANDOM:
-                        if (hasCurrentTrack()) {
-                            if (getTracksCount() > 1) {
-                                int prevIndex = mCurrentTrackIndex;
-                                int newIndex = MathUtils.randInt(0, getTracksCount() - 1);
-                                if (newIndex != prevIndex) {
-                                    if (getTargetState() == BaseMediaPlayerController.State.PLAYING) {
-                                        playTrack(newIndex);
-                                    } else {
-                                        prepareTrack(newIndex);
-                                    }
-                                    handled = true;
+                if (mTracksSwitchMode == RANDOM) {
+                    if (hasCurrentTrack()) {
+                        if (getTracksCount() > 1) {
+                            int prevIndex = mCurrentTrackIndex;
+                            int newIndex = MathUtils.randInt(0, getTracksCount() - 1);
+                            if (newIndex != prevIndex) {
+                                if (getTargetState() == BaseMediaPlayerController.State.PLAYING) {
+                                    playTrack(newIndex);
+                                } else {
+                                    prepareTrack(newIndex);
                                 }
+                                handled = true;
                             }
                         }
-                        break;
+                    }
                 }
                 if (!handled) {
                     if (getTargetState() == BaseMediaPlayerController.State.PLAYING) {
@@ -655,24 +656,24 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends Base
         if (track.duration != BasePlaylistItem.DURATION_NOT_SPECIFIED) {
             schedule = !mLoopPlaylist || getTracksCount() > 1;
             if (track.playMode != BaseMediaPlayerController.PlayMode.NONE && !track.playMode.isInfiniteMode) {
+                long actualDuration = 0;
                 if (track instanceof UriPlaylistItem) {
                     Uri uri = !TextUtils.isEmpty(((UriPlaylistItem) track).uri) ? Uri.parse(fixUrl(((UriPlaylistItem) track).uri)) : null;
                     if (uri != null && CompareUtils.stringsEqual(uri.getScheme(), ContentResolver.SCHEME_FILE, true) && !TextUtils.isEmpty(uri.getPath())) {
-                        long actualDuration = MetadataRetriever.extractMediaDuration(new File(uri.getPath()));
-                        schedule = actualDuration <= 0 || ((UriPlaylistItem) track).duration <= actualDuration - 1000;
+                        actualDuration = MetadataRetriever.extractMediaDuration(new File(uri.getPath()));
                     }
                 } else if (track instanceof DescriptorPlaylistItem) {
                     AssetFileDescriptor fd = ((DescriptorPlaylistItem) track).descriptor;
-                    long actualDuration = MetadataRetriever.extractMediaDuration(fd.getFileDescriptor());
-                    schedule = actualDuration <= 0 || ((DescriptorPlaylistItem) track).duration <= actualDuration - 1000;
+                    actualDuration = MetadataRetriever.extractMediaDuration(fd.getFileDescriptor());
                 }
+                schedule = actualDuration <= 0 || track.duration <= actualDuration - 1000;
             }
         }
         if (schedule) {
             logger.d("scheduling reset callback (play timeout) after " + track.duration + " ms");
             mTrackResetFuture = mPlayerController.scheduleOnExecutor(mTrackResetRunnable, track.duration);
         }
-        mActiveTrackChangedObservable.dispatchPrepare(getCurrentTrack(), previous);
+        mActiveTrackChangedObservable.dispatchPrepare(track, previous);
     }
 
     private void playTrackInternal(@NotNull T track) {
@@ -1094,6 +1095,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends Base
         mTrackRemovedObservable.dispatchRemoved(removedPosition, track);
     }
 
+    @NotNull
     @Override
     public String toString() {
         return "PlaylistManager{" +
@@ -1112,6 +1114,55 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends Base
                 ", mTrackRemovedObservable=" + mTrackRemovedObservable +
                 ", mTracksClearedObservable=" + mTracksClearedObservable +
                 '}';
+    }
+
+    public interface OnActiveTrackChangedListener<T extends BasePlaylistItem> {
+
+        void onPrepare(@NotNull T track, @Nullable T previous);
+
+        void onPlay(@NotNull T current, @Nullable T previous);
+
+        void onReset(@NotNull T previous);
+
+        void onCompleted(@NotNull T current);
+
+        void onError(@NotNull BaseMediaPlayerController.OnErrorListener.MediaError error, @NotNull T current);
+    }
+
+    public interface OnTracksSetListener<T extends BasePlaylistItem> {
+
+        void onTracksSet(@NotNull List<T> newTracks);
+
+        void onTracksNotSet(@NotNull List<T> incorrectTracks);
+    }
+
+    public interface OnTrackAddedListener<T extends BasePlaylistItem> {
+
+        void onTrackAdded(int to, T trackUrl);
+
+        void onTrackAddFailed(int to, T trackUrl);
+    }
+
+    public interface OnTrackSetListener<T extends BasePlaylistItem> {
+
+        void onTrackSet(int in, T track);
+
+        void onTrackSetFailed(int in, T track);
+    }
+
+    public interface OnTrackRemovedListener<T extends BasePlaylistItem> {
+
+        void onTrackRemoved(int from, T track);
+    }
+
+    public interface OnTracksClearedListener {
+
+        void onTracksCleared(int oldCount);
+    }
+
+    public enum TracksSwitchMode {
+
+        CONSEQUENTIALLY, RANDOM
     }
 
     private class MediaControllerCallbacks implements BaseMediaPlayerController.OnStateChangedListener, BaseMediaPlayerController.OnCompletionListener, BaseMediaPlayerController.OnErrorListener {
@@ -1158,7 +1209,7 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends Base
 
         @Override
         public void onTargetStateChanged(@NotNull BaseMediaPlayerController.State targetState) {
-
+            // do nothing
         }
 
         @Override
@@ -1189,53 +1240,11 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends Base
                     mActiveTrackChangedObservable.dispatchError(error, getCurrentTrack());
                 }
 
-                nextTrackByMode();
+                if (!isPlaylistLooping()) {
+                    nextTrackByMode();
+                }
             }
         }
-    }
-
-    public interface OnActiveTrackChangedListener<T extends BasePlaylistItem> {
-
-        void onPrepare(@NotNull T track, @Nullable T previous);
-
-        void onPlay(@NotNull T current, @Nullable T previous);
-
-        void onReset(@NotNull T previous);
-
-        void onCompleted(@NotNull T current);
-
-        void onError(@NotNull BaseMediaPlayerController.OnErrorListener.MediaError error, @NotNull T current);
-    }
-
-    public interface OnTracksSetListener<T extends BasePlaylistItem> {
-
-        void onTracksSet(@NotNull List<T> newTracks);
-
-        void onTracksNotSet(@NotNull List<T> incorrectTracks);
-    }
-
-    public interface OnTrackAddedListener<T extends BasePlaylistItem> {
-
-        void onTrackAdded(int to, T trackUrl);
-
-        void onTrackAddFailed(int to, T trackUrl);
-    }
-
-    public interface OnTrackSetListener<T extends BasePlaylistItem> {
-
-        void onTrackSet(int in, T track);
-
-        void onTrackSetFailed(int in, T track);
-    }
-
-    public interface OnTrackRemovedListener<T extends BasePlaylistItem> {
-
-        void onTrackRemoved(int from, T track);
-    }
-
-    public interface OnTracksClearedListener {
-
-        void onTracksCleared(int oldCount);
     }
 
     private static class OnActiveTrackChangedObservable<T extends BasePlaylistItem> extends Observable<OnActiveTrackChangedListener<T>> {
@@ -1363,11 +1372,6 @@ public class PlaylistManager<C extends BaseMediaPlayerController, T extends Base
 
             }
         }
-    }
-
-    public enum TracksSwitchMode {
-
-        CONSEQUENTIALLY, RANDOM
     }
 
 }

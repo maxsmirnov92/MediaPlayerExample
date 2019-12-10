@@ -15,7 +15,7 @@
         android:orderInCategory="2"
         android:checkable="true"
         android:title="@string/action_is_playlist"
-        android:actionViewClass="android.widget.CheckBox"
+        app:actionViewClass="android.widget.CheckBox"
         app:showAsAction="never">
         <!--app:actionViewClass="android.widget.CheckBox"-->
     </item>
@@ -25,7 +25,7 @@
         android:orderInCategory="3"
         android:checkable="true"
         android:title="@string/action_looping"
-        android:actionViewClass="android.widget.CheckBox"
+        app:actionViewClass="android.widget.CheckBox"
         app:showAsAction="never">
         <!--app:actionViewClass="android.widget.CheckBox"-->
     </item>

@@ -1,0 +1,21 @@
+[
+  {
+    "id": "mediaplayercontroller",
+    "type": "lib",
+    "versionName": "1.2.2",
+    "versionCode": 1,
+    "stable": true,
+    "unstableVersion": 0,
+    "dir": ":mediaplayercontroller"
+  },
+  {
+    "id": "testapp",
+    "type": "app",
+    "versionName": "1.0",
+    "versionCode": 1,
+    "stable": true,
+    "unstableVersion": 0,
+    "dir": ":testapp",
+    "appId": "net.maxsmr.mediaplayerexample"
+  }
+]

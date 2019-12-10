@@ -4,11 +4,12 @@ import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Looper;
-import android.support.annotation.CallSuper;
-import android.support.annotation.MainThread;
 import android.text.TextUtils;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
+
+import androidx.annotation.CallSuper;
+import androidx.annotation.MainThread;
 
 import net.maxsmr.commonutils.data.CompareUtils;
 import net.maxsmr.commonutils.data.Observable;
@@ -668,6 +669,7 @@ public abstract class JsMediaPlayer extends BaseMediaPlayerController<JsMediaPla
             this.errorCode = errorCode;
         }
 
+        @NotNull
         @Override
         public String toString() {
             return "MediaError{" +
